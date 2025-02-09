@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Transaction {
+  id_pk             Int           @id @default(autoincrement()) @map("_id")
+  id                String        @unique @default(uuid())
+  category          Category      @relation(fields: [categoryId], references: [id])
+  categoryId        String        @map("category_id")
+  amount            Float         @db.Double @map("amount")
+  transactionDate   DateTime      @db.Timestamp() @map("transaction_date")
+  createdAt         DateTime      @map("created_at") @db.Timestamp()
+  updatedAt         DateTime?     @map("updated_at") @db.Timestamp()
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamp()
+
+
+  @@index([id])
+}
+
+
+model Category {
+  id_pk             Int           @id @default(autoincrement()) @map("_id")
+  id                String        @unique @default(uuid())
+  name              String        @map("name")
+  type              String        @db.Char(12) @map("type")
+  Transaction       Transaction[]
+  createdAt         DateTime      @map("created_at") @db.Timestamp()
+  updatedAt         DateTime?     @map("updated_at") @db.Timestamp()
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamp()
+
+
+  @@index([id])
+  
+}
