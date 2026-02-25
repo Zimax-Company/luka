@@ -1,14 +1,14 @@
 # Luka - Next.js Docker App
 
-A Next.js application with Docker containerization for both local development and AWS Fargate deployment.
+A Next.js application with Docker containerization for local development and Vercel deployment.
 
 ## Features
 
 - Next.js 16+ with TypeScript
-- Docker containerization
+- Docker containerization for local development
 - Hello World API endpoint
 - **Categories CRUD API** with INCOME/EXPENSE types
-- Ready for AWS Fargate deployment
+- Ready for Vercel deployment
 
 ## Local Development
 
@@ -54,25 +54,47 @@ curl -X POST http://localhost:3000/api/categories \
   -d '{"name": "Rent", "type": "EXPENSE"}'
 ```
 
-## AWS Fargate Deployment
+## Vercel Deployment
 
-This Docker image is ready for deployment to AWS Fargate:
+This Next.js application is optimized for deployment on Vercel:
 
-1. Build and push to ECR:
+### Option 1: Deploy with Git Integration
+1. Push your code to GitHub/GitLab/Bitbucket
+2. Connect your repository to Vercel at [vercel.com](https://vercel.com)
+3. Vercel will automatically detect Next.js and deploy
+
+### Option 2: Deploy with Vercel CLI
+1. Install Vercel CLI:
 ```bash
-# Tag for ECR
-docker tag luka:latest your-account.dkr.ecr.region.amazonaws.com/luka:latest
-
-# Push to ECR
-docker push your-account.dkr.ecr.region.amazonaws.com/luka:latest
+npm install -g vercel
 ```
 
-2. Create Fargate task definition with:
-   - Image: `your-account.dkr.ecr.region.amazonaws.com/luka:latest`
-   - Port mapping: 3000
-   - Environment: `NODE_ENV=production`
+2. Login to Vercel:
+```bash
+vercel login
+```
 
-3. Deploy to ECS service
+3. Deploy from your project directory:
+```bash
+vercel
+```
+
+4. Follow the prompts to configure your deployment
+
+### Environment Variables
+For production deployment, you may want to set environment variables in the Vercel dashboard:
+- `NODE_ENV=production` (automatically set by Vercel)
+- Add any custom environment variables your app needs
+
+### Automatic Deployments
+- Every push to your main branch triggers a production deployment
+- Pull requests create preview deployments
+- Built-in CI/CD with zero configuration
+
+### Custom Domain
+You can add a custom domain in the Vercel dashboard under your project settings.
+
+See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for detailed deployment instructions.
 
 ## Project Structure
 
