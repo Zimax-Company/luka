@@ -1,0 +1,7 @@
+# Use the official Node.js image as the base image
+FROM node:20-alpine AS create-next-app
+WORKDIR /app
+# Install create-next-app globally
+RUN npm install -g create-next-app@latest
+# Initialize Next.js app in /app directory
+RUN create-next-app . --ts --eslint --app --src-dir --use-npm --no-install
