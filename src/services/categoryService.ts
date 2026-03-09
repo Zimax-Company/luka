@@ -1,6 +1,6 @@
 import { Category } from '@/types/category';
 
-// In-memory store for categories (replace with database in production)
+// In-memory store for categories (will be replaced with Prisma when DATABASE_URL is available)
 let categories: Category[] = [
   {
     id: '1',
@@ -19,15 +19,17 @@ let categories: Category[] = [
 ];
 
 export class CategoryService {
-  static getAll(): Category[] {
-    return categories;
+  static async getAll(): Promise<Category[]> {
+    // Simulate async operation
+    return Promise.resolve([...categories]);
   }
 
-  static getById(id: string): Category | undefined {
-    return categories.find(category => category.id === id);
+  static async getById(id: string): Promise<Category | null> {
+    const category = categories.find(category => category.id === id);
+    return Promise.resolve(category || null);
   }
 
-  static create(data: { name: string; type: 'INCOME' | 'EXPENSE' }): Category {
+  static async create(data: { name: string; type: 'INCOME' | 'EXPENSE' }): Promise<Category> {
     const category: Category = {
       id: Date.now().toString(),
       name: data.name,
@@ -36,25 +38,25 @@ export class CategoryService {
       updatedAt: new Date().toISOString()
     };
     categories.push(category);
-    return category;
+    return Promise.resolve(category);
   }
 
-  static update(id: string, data: { name?: string; type?: 'INCOME' | 'EXPENSE' }): Category | null {
+  static async update(id: string, data: { name?: string; type?: 'INCOME' | 'EXPENSE' }): Promise<Category | null> {
     const index = categories.findIndex(category => category.id === id);
-    if (index === -1) return null;
+    if (index === -1) return Promise.resolve(null);
 
     categories[index] = {
       ...categories[index],
       ...data,
       updatedAt: new Date().toISOString()
     };
-    return categories[index];
+    return Promise.resolve(categories[index]);
   }
 
-  static delete(id: string): boolean {
+  static async delete(id: string): Promise<boolean> {
     const index = categories.findIndex(category => category.id === id);
-    if (index === -1) return false;
+    if (index === -1) return Promise.resolve(false);
     categories.splice(index, 1);
-    return true;
+    return Promise.resolve(true);
   }
 }

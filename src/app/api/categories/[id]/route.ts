@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const category = CategoryService.getById(id);
+    const category = await CategoryService.getById(id);
     
     if (!category) {
       return NextResponse.json(
@@ -47,7 +47,7 @@ export async function PUT(
       );
     }
 
-    const category = CategoryService.update(id, body);
+    const category = await CategoryService.update(id, body);
     
     if (!category) {
       return NextResponse.json(
@@ -75,7 +75,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const deleted = CategoryService.delete(id);
+    const deleted = await CategoryService.delete(id);
     
     if (!deleted) {
       return NextResponse.json(

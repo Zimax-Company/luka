@@ -5,7 +5,7 @@ import { CreateCategoryRequest } from '@/types/category';
 // GET /api/categories - Get all categories
 export async function GET() {
   try {
-    const categories = CategoryService.getAll();
+    const categories = await CategoryService.getAll();
     return NextResponse.json({ 
       success: true, 
       data: categories 
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const category = CategoryService.create(body);
+    const category = await CategoryService.create(body);
     
     return NextResponse.json(
       { success: true, data: category },
