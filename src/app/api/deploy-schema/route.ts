@@ -1,83 +1,133 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { PrismaClient } from '@prisma/client';
 
-const execAsync = promisify(exec);
-
-// GET /api/deploy-schema - Deploy database schema using Prisma
+// GET /api/deploy-schema - Deploy database schema using Prisma Client directly
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔄 Starting database schema deployment...');
+    console.log('🔄 Starting database schema check and deployment...');
     
-    // Run prisma db push to create/update schema
-    console.log('📊 Running prisma db push...');
-    const { stdout, stderr } = await execAsync('npx prisma db push --accept-data-loss');
+    const prisma = new PrismaClient();
     
-    // Filter out update notifications and warnings that aren't actual errors
-    const actualErrors = stderr
-      ?.split('\n')
-      .filter(line => 
-        line.trim() && 
-        !line.includes('Update available') &&
-        !line.includes('major update') &&
-        !line.includes('pris.ly/d/major-version-upgrade') &&
-        !line.includes('npm i') &&
-        !line.includes('│') &&
-        !line.includes('┌') &&
-        !line.includes('└') &&
-        !line.includes('warn')
-      )
-      .join('\n');
-    
-    if (actualErrors && actualErrors.trim()) {
-      console.error('❌ Schema deployment error:', actualErrors);
-      return NextResponse.json({
-        success: false,
-        error: 'Schema deployment failed',
-        details: actualErrors,
-        suggestion: 'Check your DATABASE_URL and database connection'
-      }, { status: 500 });
-    }
-    
-    console.log('✅ Schema deployment successful');
-    console.log('Output:', stdout);
-    
-    // After schema is created, we can safely test the connection
     try {
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
-      
+      // First, try to connect to the database
+      console.log('📊 Testing database connection...');
       await prisma.$connect();
+      console.log('✅ Database connection successful');
       
-      // Count existing data
-      const categoryCount = await prisma.category.count();
-      const transactionCount = await prisma.transaction.count();
-      
-      await prisma.$disconnect();
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Database schema deployed successfully',
-        data: {
-          schemaDeployed: true,
-          categoriesCount: categoryCount,
-          transactionsCount: transactionCount,
-          output: stdout,
-          nextStep: categoryCount === 0 ? 'Run /api/migrate to seed initial data' : 'Database ready to use'
+      // Try to query existing tables to see if schema exists
+      try {
+        console.log('🔍 Checking if database schema exists...');
+        const categoryCount = await prisma.category.count();
+        const transactionCount = await prisma.transaction.count();
+        
+        console.log('✅ Database schema exists and is accessible');
+        console.log(`📈 Current data: ${categoryCount} categories, ${transactionCount} transactions`);
+        
+        await prisma.$disconnect();
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Database schema already exists and is working',
+          data: {
+            schemaExists: true,
+            categoriesCount: categoryCount,
+            transactionsCount: transactionCount,
+            status: 'ready',
+            nextStep: transactionCount === 0 ? 'Use /api/migrate to seed initial data' : 'Database is ready to use'
+          }
+        });
+        
+      } catch (schemaError) {
+        console.log('⚠️  Database schema might not exist, attempting to create...');
+        
+        // If we can't query the tables, they might not exist
+        // We'll try to create them using raw SQL commands
+        try {
+          console.log('📊 Creating categories table...');
+          await prisma.$executeRaw`
+            CREATE TABLE IF NOT EXISTS categories (
+              id VARCHAR(191) NOT NULL PRIMARY KEY,
+              name VARCHAR(255) NOT NULL,
+              type ENUM('INCOME', 'EXPENSE') NOT NULL,
+              created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+              updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+              UNIQUE KEY unique_name_type (name, type),
+              INDEX idx_type (type),
+              INDEX idx_name (name),
+              INDEX idx_created_at (created_at)
+            )
+          `;
+          
+          console.log('💰 Creating transactions table...');
+          await prisma.$executeRaw`
+            CREATE TABLE IF NOT EXISTS transactions (
+              id VARCHAR(191) NOT NULL PRIMARY KEY,
+              date DATE NOT NULL,
+              note TEXT NOT NULL,
+              category_id VARCHAR(191) NOT NULL,
+              amount DECIMAL(10,2) NOT NULL,
+              created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+              updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+              INDEX idx_date (date),
+              INDEX idx_category (category_id),
+              INDEX idx_amount (amount),
+              INDEX idx_created_at (created_at),
+              FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+            )
+          `;
+          
+          console.log('✅ Database schema created successfully using raw SQL');
+          
+          // Test the newly created schema
+          const newCategoryCount = await prisma.category.count();
+          const newTransactionCount = await prisma.transaction.count();
+          
+          await prisma.$disconnect();
+          
+          return NextResponse.json({
+            success: true,
+            message: 'Database schema created successfully',
+            data: {
+              schemaCreated: true,
+              categoriesCount: newCategoryCount,
+              transactionsCount: newTransactionCount,
+              status: 'created',
+              nextStep: 'Use /api/migrate to seed initial data'
+            }
+          });
+          
+        } catch (createError) {
+          console.error('❌ Failed to create schema with raw SQL:', createError);
+          await prisma.$disconnect();
+          
+          return NextResponse.json({
+            success: false,
+            error: 'Failed to create database schema',
+            message: createError instanceof Error ? createError.message : 'Unknown schema creation error',
+            suggestions: [
+              'Check database permissions - user needs CREATE TABLE privileges',
+              'Verify database connection and credentials',
+              'Ensure database name exists on server',
+              'Check if database user has schema creation permissions'
+            ]
+          }, { status: 500 });
         }
-      });
+      }
       
     } catch (connectionError) {
+      console.error('❌ Database connection failed:', connectionError);
+      
       return NextResponse.json({
-        success: true,
-        message: 'Schema deployed but connection test failed',
-        data: {
-          schemaDeployed: true,
-          output: stdout,
-          connectionWarning: 'Could not test database connection after deployment',
-          nextStep: 'Try /api/migrate endpoint to verify database'
-        }
-      });
+        success: false,
+        error: 'Database connection failed',
+        message: connectionError instanceof Error ? connectionError.message : 'Unknown connection error',
+        suggestions: [
+          'Verify DATABASE_URL is correct',
+          'Check database server is running and accessible',
+          'Confirm database credentials are valid',
+          'Ensure database allows connections from your Vercel deployment'
+        ]
+      }, { status: 500 });
     }
     
   } catch (error) {
@@ -102,31 +152,86 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔄 Starting forced schema reset and deployment...');
     
-    // Force push schema with data loss acceptance
-    console.log('📊 Running prisma db push --force-reset...');
-    const { stdout, stderr } = await execAsync('npx prisma db push --force-reset --accept-data-loss');
+    const prisma = new PrismaClient();
     
-    if (stderr && !stderr.includes('warn')) {
-      console.error('❌ Force schema reset error:', stderr);
+    try {
+      await prisma.$connect();
+      console.log('✅ Database connection successful');
+      
+      // Drop existing tables if they exist (force reset)
+      console.log('🗑️  Dropping existing tables...');
+      await prisma.$executeRaw`DROP TABLE IF EXISTS transactions`;
+      await prisma.$executeRaw`DROP TABLE IF EXISTS categories`;
+      
+      // Recreate tables
+      console.log('📊 Creating categories table...');
+      await prisma.$executeRaw`
+        CREATE TABLE categories (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          type ENUM('INCOME', 'EXPENSE') NOT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+          UNIQUE KEY unique_name_type (name, type),
+          INDEX idx_type (type),
+          INDEX idx_name (name),
+          INDEX idx_created_at (created_at)
+        )
+      `;
+      
+      console.log('💰 Creating transactions table...');
+      await prisma.$executeRaw`
+        CREATE TABLE transactions (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          date DATE NOT NULL,
+          note TEXT NOT NULL,
+          category_id VARCHAR(191) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+          INDEX idx_date (date),
+          INDEX idx_category (category_id),
+          INDEX idx_amount (amount),
+          INDEX idx_created_at (created_at),
+          FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+        )
+      `;
+      
+      console.log('✅ Force schema reset successful');
+      
+      // Verify the new schema
+      const categoryCount = await prisma.category.count();
+      const transactionCount = await prisma.transaction.count();
+      
+      await prisma.$disconnect();
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Database schema forcefully reset and deployed',
+        data: {
+          schemaReset: true,
+          categoriesCount: categoryCount,
+          transactionsCount: transactionCount,
+          warning: 'All existing data was deleted',
+          nextStep: 'Run /api/migrate to seed fresh data'
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Force schema reset failed:', error);
+      await prisma.$disconnect();
+      
       return NextResponse.json({
         success: false,
         error: 'Force schema reset failed',
-        details: stderr
+        message: error instanceof Error ? error.message : 'Unknown error',
+        suggestions: [
+          'Check database permissions for DROP/CREATE operations',
+          'Verify database connection and credentials',
+          'Ensure database user has full schema modification rights'
+        ]
       }, { status: 500 });
     }
-    
-    console.log('✅ Force schema reset successful');
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Database schema forcefully reset and deployed',
-      data: {
-        schemaReset: true,
-        output: stdout,
-        warning: 'All existing data was deleted',
-        nextStep: 'Run /api/migrate to seed fresh data'
-      }
-    });
     
   } catch (error) {
     console.error('❌ Force schema reset failed:', error);
