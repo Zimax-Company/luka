@@ -26,7 +26,16 @@
 
 Set these in your Vercel dashboard under Project Settings → Environment Variables:
 
-#### Database Configuration
+#### Option 1: Individual Database Components (Recommended for Vercel)
+```
+DB_USER = your_database_user
+DB_PASSWORD = your_database_password
+DB_HOST = your_database_host
+DB_NAME = your_database_name
+DB_PORT = 3306
+```
+
+#### Option 2: Complete Database URL
 ```
 DATABASE_URL = mysql://username:password@production-host:3306/database_name
 ```
@@ -46,12 +55,22 @@ NEXT_PUBLIC_APP_URL = https://your-app-name.vercel.app
 1. **Via Vercel Dashboard:**
    - Go to your project dashboard
    - Navigate to Settings → Environment Variables
-   - Add each variable with its value
+   - Add each variable with its value:
+     - `DB_USER`: Your database username
+     - `DB_PASSWORD`: Your database password  
+     - `DB_HOST`: Your database host
+     - `DB_NAME`: Your database name
+     - `DB_PORT`: 3306 (or your database port)
+     - `NODE_ENV`: production
+     - `NEXT_PUBLIC_APP_URL`: https://your-app.vercel.app
    - Set the environment (Production, Preview, Development)
 
 2. **Via Vercel CLI:**
    ```bash
-   vercel env add DATABASE_URL
+   vercel env add DB_USER
+   vercel env add DB_PASSWORD
+   vercel env add DB_HOST
+   vercel env add DB_NAME
    vercel env add NODE_ENV
    vercel env add NEXT_PUBLIC_APP_URL
    ```
