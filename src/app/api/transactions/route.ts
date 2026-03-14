@@ -1,54 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TransactionService } from '@/services/transactionService';
+import { PrismaTransactionService } from '@/services/prismaTransactionService';
 import { CreateTransactionRequest } from '@/types/transaction';
-import env from '@/lib/env';
+
+// Always use database service (we have MySQL running)
+function getTransactionService() {
+  return PrismaTransactionService;
+}
 
 // GET /api/transactions - Get all transactions
 export async function GET(request: NextRequest) {
   try {
-    // Log database configuration for debugging
-    console.log('=== TRANSACTIONS API - DATABASE CHECK ===');
-    console.log('Database URL configured:', !!env.DATABASE_URL);
-    console.log('Environment:', env.NODE_ENV);
-    console.log('Database components check:', {
-      hasUser: !!env.DB_USER,
-      hasPassword: !!env.DB_PASSWORD,
-      hasHost: !!env.DB_HOST,
-      hasName: !!env.DB_NAME
-    });
-    console.log('==========================================');
-
+    console.log('Getting all transactions from database...');
+    
+    const service = getTransactionService();
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const limit = searchParams.get('limit');
 
     let transactions;
 
     if (categoryId) {
-      transactions = await TransactionService.getByCategory(categoryId);
+      transactions = await service.getByCategory(categoryId);
     } else if (startDate && endDate) {
-      transactions = await TransactionService.getByDateRange(startDate, endDate);
+      transactions = await service.getByDateRange(startDate, endDate);
     } else {
-      transactions = await TransactionService.getAll();
+      transactions = await service.getAll();
+    }
+
+    // Apply limit if specified
+    if (limit) {
+      const limitNum = parseInt(limit, 10);
+      if (!isNaN(limitNum) && limitNum > 0) {
+        transactions = transactions.slice(0, limitNum);
+      }
     }
 
     return NextResponse.json({
       success: true,
       data: transactions,
-      count: transactions.length
+      count: transactions.length,
+      source: 'database'
     });
 
   } catch (error) {
     console.error('Error fetching transactions:', error);
-    console.error('Database configuration:', {
-      DATABASE_URL: env.DATABASE_URL ? 'SET' : 'NOT SET',
-      components: {
-        DB_USER: env.DB_USER || 'NOT SET',
-        DB_HOST: env.DB_HOST || 'NOT SET',
-        DB_NAME: env.DB_NAME || 'NOT SET'
-      }
-    });
     
     return NextResponse.json(
       { 
@@ -64,6 +61,9 @@ export async function GET(request: NextRequest) {
 // POST /api/transactions - Create new transaction
 export async function POST(request: NextRequest) {
   try {
+    console.log('Creating new transaction...');
+    const service = getTransactionService();
+
     const body: CreateTransactionRequest = await request.json();
 
     // Validate required fields
@@ -78,12 +78,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const transaction = await TransactionService.create(body);
+    const transaction = await service.create(body);
 
     return NextResponse.json({
       success: true,
       data: transaction,
-      message: 'Transaction created successfully'
+      message: 'Transaction created successfully',
+      source: 'database'
     }, { status: 201 });
 
   } catch (error) {

@@ -5,7 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -19,12 +20,34 @@ model Category {
   type      CategoryType
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
+  
+  // Relationships
+  transactions Transaction[]
 
   @@unique([name, type], name: "unique_name_type")
   @@index([type], name: "idx_type")
   @@index([name], name: "idx_name")
   @@index([createdAt], name: "idx_created_at")
   @@map("categories")
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  note       String   @db.Text
+  categoryId String   @map("category_id")
+  amount     Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relationships
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([date], name: "idx_date")
+  @@index([categoryId], name: "idx_category")
+  @@index([amount], name: "idx_amount")
+  @@index([createdAt], name: "idx_created_at")
+  @@map("transactions")
 }
 
 enum CategoryType {

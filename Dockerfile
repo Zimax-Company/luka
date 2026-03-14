@@ -2,20 +2,24 @@
 # Use the official Node.js image
 FROM node:22-alpine
 
+# Install dependencies required for Prisma
+RUN apk add --no-cache libc6-compat openssl openssl-dev
+
 # Set working directory
 WORKDIR /app
 
-# Install create-next-app globally
-RUN npm install -g create-next-app@latest
-
-# Create Next.js app
-RUN create-next-app . --ts --eslint --app --src-dir --use-npm --no-install --yes
-
-# Copy local files (overwriting generated files)
-COPY . .
+# Copy package files first for better caching
+COPY package*.json ./
+COPY prisma ./prisma
 
 # Install dependencies
 RUN npm install
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy all source code
+COPY . .
 
 # Build the Next.js app
 RUN npm run build

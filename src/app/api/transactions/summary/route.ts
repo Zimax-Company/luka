@@ -1,65 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TransactionService } from '@/services/transactionService';
+import { PrismaTransactionService } from '@/services/prismaTransactionService';
+
+// Always use database service (we have MySQL running)
+function getTransactionService() {
+  return PrismaTransactionService;
+}
 
 // GET /api/transactions/summary - Get transaction summary/statistics
 export async function GET(request: NextRequest) {
   try {
+    console.log('Generating transaction summary from database...');
+    const service = getTransactionService();
+    
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Get totals by type
-    const totals = await TransactionService.getTotalByType();
+    // Get raw summary data from service
+    const rawSummary = await service.getSummary();
     
-    // Get all transactions for additional stats
-    let transactions;
-    if (startDate && endDate) {
-      transactions = await TransactionService.getByDateRange(startDate, endDate);
-    } else {
-      transactions = await TransactionService.getAll();
-    }
-
-    // Calculate additional statistics
-    const stats = {
-      totalTransactions: transactions.length,
-      incomeTransactions: transactions.filter(t => t.category.type === 'INCOME').length,
-      expenseTransactions: transactions.filter(t => t.category.type === 'EXPENSE').length,
-      avgTransactionAmount: transactions.length > 0 
-        ? transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length 
-        : 0,
-      lastTransactionDate: transactions.length > 0 
-        ? Math.max(...transactions.map(t => new Date(t.date).getTime()))
-        : null,
-      categoryBreakdown: transactions.reduce((breakdown, t) => {
-        const categoryName = t.category.name;
-        if (!breakdown[categoryName]) {
-          breakdown[categoryName] = {
-            count: 0,
-            total: 0,
-            type: t.category.type
-          };
-        }
-        breakdown[categoryName].count++;
-        breakdown[categoryName].total += t.amount;
-        return breakdown;
-      }, {} as Record<string, { count: number; total: number; type: string }>)
+    // Transform to match dashboard component expectations
+    const transformedSummary = {
+      totals: {
+        income: rawSummary.totalIncome,
+        expenses: rawSummary.totalExpenses,
+        net: rawSummary.netIncome
+      },
+      statistics: {
+        totalTransactions: rawSummary.totalTransactions,
+        incomeTransactions: Object.values(rawSummary.categoryBreakdown)
+          .filter((cat: any) => cat.type === 'INCOME')
+          .reduce((sum: number, cat: any) => sum + cat.count, 0),
+        expenseTransactions: Object.values(rawSummary.categoryBreakdown)
+          .filter((cat: any) => cat.type === 'EXPENSE')
+          .reduce((sum: number, cat: any) => sum + cat.count, 0),
+        avgTransactionAmount: rawSummary.avgTransactionAmount,
+        lastTransactionDate: new Date().toISOString(), // We'll improve this later
+        categoryBreakdown: rawSummary.categoryBreakdown
+      }
     };
-
+    
     return NextResponse.json({
       success: true,
-      data: {
-        totals,
-        statistics: {
-          ...stats,
-          lastTransactionDate: stats.lastTransactionDate 
-            ? new Date(stats.lastTransactionDate).toISOString().split('T')[0]
-            : null
-        },
-        dateRange: {
-          startDate: startDate || 'all time',
-          endDate: endDate || 'all time'
-        }
-      }
+      data: transformedSummary,
+      source: 'database'
     });
 
   } catch (error) {

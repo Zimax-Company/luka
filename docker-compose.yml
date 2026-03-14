@@ -1,23 +1,47 @@
 version: '3.8'
 
 services:
-  nextjs-app:
-    build: .
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: luka-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: luka_categories
+      MYSQL_USER: luka_user
+      MYSQL_PASSWORD: luka_password
     ports:
-      - "3000:3000"
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - luka-network
+
+  # Next.js Application with Database
+  app:
+    build: .
+    container_name: luka-app
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
-    restart: unless-stopped
-
-  nextjs-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+      - DB_USER=luka_user
+      - DB_PASSWORD=luka_password
+      - DB_HOST=mysql
+      - DB_NAME=luka_categories
+      - DB_PORT=3306
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-    command: npm run dev
+    depends_on:
+      - mysql
+    networks:
+      - luka-network
+
+volumes:
+  mysql_data:
+
+networks:
+  luka-network:
+    driver: bridge

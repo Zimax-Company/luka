@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CategoryService } from '@/services/categoryService';
+import { PrismaCategoryService } from '@/services/prismaCategoryService';
 import { UpdateCategoryRequest } from '@/types/category';
 
 // GET /api/categories/[id] - Get category by ID
@@ -9,7 +9,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const category = await CategoryService.getById(id);
+    console.log(`Getting category with ID: ${id}`);
+    
+    const category = await PrismaCategoryService.getById(id);
     
     if (!category) {
       return NextResponse.json(
@@ -20,7 +22,8 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: category
+      data: category,
+      source: 'database'
     });
   } catch (error) {
     return NextResponse.json(
@@ -47,7 +50,7 @@ export async function PUT(
       );
     }
 
-    const category = await CategoryService.update(id, body);
+    const category = await PrismaCategoryService.update(id, body);
     
     if (!category) {
       return NextResponse.json(
@@ -58,7 +61,8 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: category
+      data: category,
+      source: 'database'
     });
   } catch (error) {
     return NextResponse.json(
@@ -75,18 +79,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const deleted = await CategoryService.delete(id);
+    console.log(`Deleting category with ID: ${id}`);
     
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, error: 'Category not found' },
-        { status: 404 }
-      );
-    }
+    await PrismaCategoryService.delete(id);
 
     return NextResponse.json({
       success: true,
-      message: 'Category deleted successfully'
+      message: 'Category deleted successfully',
+      source: 'database'
     });
   } catch (error) {
     return NextResponse.json(
