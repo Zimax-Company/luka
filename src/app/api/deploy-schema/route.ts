@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
             categoriesCount: categoryCount,
             transactionsCount: transactionCount,
             status: 'ready',
-            nextStep: transactionCount === 0 ? 'Use /api/migrate to seed initial data' : 'Database is ready to use'
+            nextStep: 'Database schema is ready for use'
           }
         });
         
@@ -84,19 +84,17 @@ export async function GET(request: NextRequest) {
           
           await prisma.$disconnect();
           
-          return NextResponse.json({
-            success: true,
-            message: 'Database schema created successfully',
-            data: {
-              schemaCreated: true,
-              categoriesCount: newCategoryCount,
-              transactionsCount: newTransactionCount,
-              status: 'created',
-              nextStep: 'Use /api/migrate to seed initial data'
-            }
-          });
-          
-        } catch (createError) {
+            return NextResponse.json({
+              success: true,
+              message: 'Database schema created successfully',
+              data: {
+                schemaCreated: true,
+                categoriesCount: newCategoryCount,
+                transactionsCount: newTransactionCount,
+                status: 'created',
+                nextStep: 'Database schema is ready for use'
+              }
+            });        } catch (createError) {
           console.error('❌ Failed to create schema with raw SQL:', createError);
           await prisma.$disconnect();
           
@@ -205,19 +203,17 @@ export async function POST(request: NextRequest) {
       
       await prisma.$disconnect();
       
-      return NextResponse.json({
-        success: true,
-        message: 'Database schema forcefully reset and deployed',
-        data: {
-          schemaReset: true,
-          categoriesCount: categoryCount,
-          transactionsCount: transactionCount,
-          warning: 'All existing data was deleted',
-          nextStep: 'Run /api/migrate to seed fresh data'
-        }
-      });
-      
-    } catch (error) {
+        return NextResponse.json({
+          success: true,
+          message: 'Database schema forcefully reset and deployed',
+          data: {
+            schemaReset: true,
+            categoriesCount: categoryCount,
+            transactionsCount: transactionCount,
+            warning: 'All existing data was deleted',
+            nextStep: 'Database schema is ready for use (no data seeded)'
+          }
+        });    } catch (error) {
       console.error('❌ Force schema reset failed:', error);
       await prisma.$disconnect();
       

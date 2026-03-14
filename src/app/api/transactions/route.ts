@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const limit = searchParams.get('limit');
+    const type = searchParams.get('type');
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
 
     let transactions;
 
@@ -27,6 +30,33 @@ export async function GET(request: NextRequest) {
       transactions = await service.getByDateRange(startDate, endDate);
     } else {
       transactions = await service.getAll();
+    }
+
+    // Apply type filter if specified
+    if (type && (type === 'INCOME' || type === 'EXPENSE')) {
+      transactions = transactions.filter(transaction => transaction.category?.type === type);
+    }
+
+    // Apply month filter if specified
+    if (month) {
+      const monthNum = parseInt(month, 10);
+      if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        transactions = transactions.filter(transaction => {
+          const transactionMonth = new Date(transaction.date).getMonth() + 1; // getMonth() returns 0-11
+          return transactionMonth === monthNum;
+        });
+      }
+    }
+
+    // Apply year filter if specified
+    if (year) {
+      const yearNum = parseInt(year, 10);
+      if (!isNaN(yearNum)) {
+        transactions = transactions.filter(transaction => {
+          const transactionYear = new Date(transaction.date).getFullYear();
+          return transactionYear === yearNum;
+        });
+      }
     }
 
     // Apply limit if specified

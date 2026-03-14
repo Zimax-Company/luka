@@ -2,7 +2,7 @@
 
 ## Local Development
 
-### Setup
+### Setup (One File Approach)
 1. Copy `.env.example` to `.env.local`:
    ```bash
    cp .env.example .env.local
@@ -11,14 +11,21 @@
 2. Update `.env.local` with your local database credentials:
    ```bash
    DATABASE_URL="mysql://root:your_password@localhost:3306/luka_categories"
-   NODE_ENV=development
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
 
-### File Structure
-- `.env` - Default/fallback values (committed to git)
-- `.env.local` - Local development secrets (NOT committed to git)
+### File Structure (Simplified)
 - `.env.example` - Template file (committed to git)
+- `.env.local` - Your local development settings (NOT committed to git)
+- Vercel Dashboard - Production environment variables (secure)
+
+### NODE_ENV Automatic Detection
+You don't need to manually set NODE_ENV because:
+- `npm run dev` → Automatically sets `NODE_ENV=development`
+- `npm run build` + `npm start` → Automatically sets `NODE_ENV=production`
+- Vercel deployment → Automatically sets `NODE_ENV=production`
+- Docker dev container → Uses `npm run dev` → `NODE_ENV=development`
+- Docker prod container → Uses `npm start` → `NODE_ENV=production`
 
 ## Vercel Production Deployment
 
@@ -42,7 +49,8 @@ DATABASE_URL = mysql://username:password@production-host:3306/database_name
 
 #### Environment Settings
 ```
-NODE_ENV = production
+# NODE_ENV is automatically set to "production" by Vercel
+# You don't need to set it manually
 ```
 
 #### Public Variables (accessible in browser)

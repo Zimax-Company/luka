@@ -1,208 +1,141 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { MigrationRunner } from '@/lib/migrations';
 
-// GET /api/migrate - Run database migrations and setup
+// GET /api/migrate - Check migration status (Laravel-style)
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔄 Starting database migration...');
+    console.log('🔄 Checking migration status...');
     
     const prisma = new PrismaClient();
+    const migrationRunner = new MigrationRunner(prisma);
     
-    // Check if we need to create the database schema
-    console.log('📊 Checking database connection...');
-    
-    // Test basic connection
-    await prisma.$connect();
-    console.log('✅ Database connection successful');
-    
-    // Check if tables exist by trying to count records
     try {
-      const categoryCount = await prisma.category.count();
-      const transactionCount = await prisma.transaction.count();
+      await prisma.$connect();
+      console.log('✅ Database connection successful');
       
-      console.log(`📈 Current database state:`);
-      console.log(`   Categories: ${categoryCount}`);
-      console.log(`   Transactions: ${transactionCount}`);
+      // Get migration status
+      const status = await migrationRunner.getStatus();
+      const pendingMigrations = await migrationRunner.getPendingMigrations();
+      const executedMigrations = await migrationRunner.getExecutedMigrations();
       
-      if (categoryCount === 0) {
-        console.log('🌱 Database is empty, running seed data...');
-        
-        // Create sample categories if none exist
-        const categories = await Promise.all([
-          prisma.category.create({ data: { name: 'Salary', type: 'INCOME' } }),
-          prisma.category.create({ data: { name: 'Food', type: 'EXPENSE' } }),
-          prisma.category.create({ data: { name: 'Transportation', type: 'EXPENSE' } }),
-          prisma.category.create({ data: { name: 'Freelance', type: 'INCOME' } }),
-          prisma.category.create({ data: { name: 'Entertainment', type: 'EXPENSE' } }),
-          prisma.category.create({ data: { name: 'Health', type: 'EXPENSE' } }),
-          prisma.category.create({ data: { name: 'Utilities', type: 'EXPENSE' } }),
-          prisma.category.create({ data: { name: 'Investment', type: 'INCOME' } })
-        ]);
-        
-        console.log(`✅ Created ${categories.length} categories`);
-        
-        // Create sample transactions
-        const salaryCategory = categories.find(c => c.name === 'Salary');
-        const foodCategory = categories.find(c => c.name === 'Food');
-        const transportCategory = categories.find(c => c.name === 'Transportation');
-        
-        if (salaryCategory && foodCategory && transportCategory) {
-          const transactions = await Promise.all([
-            prisma.transaction.create({
-              data: {
-                amount: 3500.00,
-                note: 'Monthly salary payment',
-                date: new Date('2026-03-01'),
-                categoryId: salaryCategory.id
-              }
-            }),
-            prisma.transaction.create({
-              data: {
-                amount: 25.00,
-                note: 'Lunch at restaurant',
-                date: new Date('2026-03-02'),
-                categoryId: foodCategory.id
-              }
-            }),
-            prisma.transaction.create({
-              data: {
-                amount: 45.00,
-                note: 'Gas station fill-up',
-                date: new Date('2026-03-03'),
-                categoryId: transportCategory.id
-              }
-            })
-          ]);
-          
-          console.log(`✅ Created ${transactions.length} sample transactions`);
-        }
-      }
-      
-      // Final count
-      const finalCategoryCount = await prisma.category.count();
-      const finalTransactionCount = await prisma.transaction.count();
+      console.log(`📈 Migration Status:`);
+      console.log(`   Total migrations: ${status.total}`);
+      console.log(`   Executed: ${status.executed}`);
+      console.log(`   Pending: ${status.pending}`);
+      console.log(`   Last batch: ${status.lastBatch}`);
       
       await prisma.$disconnect();
       
       return NextResponse.json({
         success: true,
-        message: 'Database migration completed successfully',
+        message: 'Migration status retrieved successfully',
         data: {
-          categoriesCount: finalCategoryCount,
-          transactionsCount: finalTransactionCount,
-          status: categoryCount === 0 ? 'seeded' : 'existing'
+          status: {
+            total: status.total,
+            executed: status.executed,
+            pending: status.pending,
+            lastBatch: status.lastBatch
+          },
+          pendingMigrations: pendingMigrations.map(m => ({
+            id: m.id,
+            description: m.description
+          })),
+          executedMigrations,
+          upToDate: status.pending === 0
         }
       });
       
-    } catch (tableError) {
-      console.log('⚠️  Tables might not exist, this could be a fresh database');
-      console.log('🔄 Attempting to push schema...');
-      
-      // If we can't query tables, they might not exist
-      // In a real production environment, you'd want to run prisma migrate deploy
-      // For now, we'll return a helpful message
+    } catch (error) {
+      console.error('❌ Migration status check failed:', error);
       await prisma.$disconnect();
       
       return NextResponse.json({
         success: false,
-        error: 'Database schema not found',
-        message: 'You need to run "prisma migrate deploy" or "prisma db push" to create the database schema first',
-        suggestion: 'Run this endpoint after setting up the database schema'
+        error: 'Migration status check failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        suggestions: [
+          'Verify database connection is working',
+          'Check if database exists on server',
+          'Ensure migration files are properly formatted'
+        ]
       }, { status: 500 });
     }
     
   } catch (error) {
-    console.error('❌ Migration failed:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Migration failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    console.error('❌ Migration status check failed:', error);
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to check migration status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
-// POST /api/migrate - Force reset and reseed database
+// POST /api/migrate - Run pending migrations (Laravel-style)
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔄 Starting database reset and reseed...');
+    console.log('🔄 Running database migrations...');
     
     const prisma = new PrismaClient();
-    await prisma.$connect();
+    const migrationRunner = new MigrationRunner(prisma);
     
-    // Clear existing data
-    console.log('🗑️  Clearing existing data...');
-    await prisma.transaction.deleteMany();
-    await prisma.category.deleteMany();
-    
-    // Create fresh categories
-    console.log('🌱 Creating fresh categories...');
-    const categories = await Promise.all([
-      prisma.category.create({ data: { name: 'Salary', type: 'INCOME' } }),
-      prisma.category.create({ data: { name: 'Food', type: 'EXPENSE' } }),
-      prisma.category.create({ data: { name: 'Transportation', type: 'EXPENSE' } }),
-      prisma.category.create({ data: { name: 'Freelance', type: 'INCOME' } }),
-      prisma.category.create({ data: { name: 'Entertainment', type: 'EXPENSE' } }),
-      prisma.category.create({ data: { name: 'Health', type: 'EXPENSE' } }),
-      prisma.category.create({ data: { name: 'Utilities', type: 'EXPENSE' } }),
-      prisma.category.create({ data: { name: 'Investment', type: 'INCOME' } })
-    ]);
-    
-    // Create sample transactions
-    console.log('💰 Creating sample transactions...');
-    const salaryCategory = categories.find(c => c.name === 'Salary');
-    const foodCategory = categories.find(c => c.name === 'Food');
-    const transportCategory = categories.find(c => c.name === 'Transportation');
-    const freelanceCategory = categories.find(c => c.name === 'Freelance');
-    
-    if (salaryCategory && foodCategory && transportCategory && freelanceCategory) {
-      await Promise.all([
-        prisma.transaction.create({
-          data: { amount: 3500.00, note: 'Monthly salary payment', date: new Date('2026-03-01'), categoryId: salaryCategory.id }
-        }),
-        prisma.transaction.create({
-          data: { amount: 25.00, note: 'Lunch at restaurant', date: new Date('2026-03-02'), categoryId: foodCategory.id }
-        }),
-        prisma.transaction.create({
-          data: { amount: 45.00, note: 'Gas station fill-up', date: new Date('2026-03-03'), categoryId: transportCategory.id }
-        }),
-        prisma.transaction.create({
-          data: { amount: 800.00, note: 'Freelance project payment', date: new Date('2026-03-04'), categoryId: freelanceCategory.id }
-        }),
-        prisma.transaction.create({
-          data: { amount: 65.00, note: 'Grocery shopping', date: new Date('2026-03-05'), categoryId: foodCategory.id }
-        })
-      ]);
+    try {
+      await prisma.$connect();
+      console.log('✅ Database connection successful');
+      
+      // Run pending migrations
+      const result = await migrationRunner.runMigrations();
+      
+      await prisma.$disconnect();
+      
+      if (result.errors.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Some migrations failed',
+          data: {
+            executed: result.executed,
+            errors: result.errors
+          }
+        }, { status: 500 });
+      }
+      
+      return NextResponse.json({
+        success: true,
+        message: result.executed.length > 0 
+          ? `Successfully executed ${result.executed.length} migrations` 
+          : 'No pending migrations to run',
+        data: {
+          executed: result.executed,
+          count: result.executed.length,
+          status: 'completed'
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Migration execution failed:', error);
+      await prisma.$disconnect();
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Migration execution failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        suggestions: [
+          'Check database permissions',
+          'Verify migration file syntax',
+          'Ensure database connection is stable'
+        ]
+      }, { status: 500 });
     }
     
-    const finalCategoryCount = await prisma.category.count();
-    const finalTransactionCount = await prisma.transaction.count();
-    
-    await prisma.$disconnect();
-    
-    console.log('✅ Database reset and reseed completed');
+  } catch (error) {
+    console.error('❌ Migration execution failed:', error);
     
     return NextResponse.json({
-      success: true,
-      message: 'Database reset and reseeded successfully',
-      data: {
-        categoriesCount: finalCategoryCount,
-        transactionsCount: finalTransactionCount,
-        status: 'reset_and_seeded'
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Reset and reseed failed:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Reset and reseed failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+      success: false,
+      error: 'Migration execution failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

@@ -57,7 +57,7 @@ export class PrismaTransactionService {
     });
     
     if (transaction) {
-      console.log(`✅ Database found transaction: $${transaction.amount} - ${transaction.note} (${transaction.category.name})`);
+      console.log(`✅ Database found transaction: ₦${transaction.amount} - ${transaction.note} (${transaction.category.name})`);
       return {
         id: transaction.id,
         amount: Number(transaction.amount),
@@ -80,7 +80,7 @@ export class PrismaTransactionService {
 
   // Create new transaction in MySQL database
   static async create(data: { amount: number; note: string; date: string; categoryId: string }): Promise<TransactionWithCategory> {
-    this.logDatabaseOperation('INSERT INTO transactions (amount, note, date, category_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())', `$${data.amount} - ${data.note} (category_id=${data.categoryId})`);
+    this.logDatabaseOperation('INSERT INTO transactions (amount, note, date, category_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())', `₦${data.amount} - ${data.note} (category_id=${data.categoryId})`);
     
     // Verify category exists first
     const category = await prisma.category.findUnique({
@@ -104,7 +104,7 @@ export class PrismaTransactionService {
       }
     });
     
-    console.log(`✅ Database created transaction with id=${newTransaction.id}: $${newTransaction.amount} - ${newTransaction.note}`);
+    console.log(`✅ Database created transaction with id=${newTransaction.id}: ₦${newTransaction.amount} - ${newTransaction.note}`);
     
     return {
       id: newTransaction.id,
@@ -141,7 +141,7 @@ export class PrismaTransactionService {
         }
       });
       
-      console.log(`✅ Database updated transaction: $${updatedTransaction.amount} - ${updatedTransaction.note}`);
+      console.log(`✅ Database updated transaction: ₦${updatedTransaction.amount} - ${updatedTransaction.note}`);
       
       return {
         id: updatedTransaction.id,

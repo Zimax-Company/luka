@@ -34,6 +34,8 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithCategory | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -49,6 +51,8 @@ export default function TransactionsPage() {
       const params = new URLSearchParams();
       if (filterCategory) params.append('categoryId', filterCategory);
       if (filterType) params.append('type', filterType);
+      if (filterMonth) params.append('month', filterMonth);
+      if (filterYear) params.append('year', filterYear);
       
       const response = await fetch(`/api/transactions?${params.toString()}`);
       const data = await response.json();
@@ -97,7 +101,7 @@ export default function TransactionsPage() {
     };
     
     loadData();
-  }, [filterCategory, filterType]);
+  }, [filterCategory, filterType, filterMonth, filterYear]);
 
   // Form handlers
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,9 +181,9 @@ export default function TransactionsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-NG', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'NGN'
     }).format(amount);
   };
 
@@ -290,6 +294,53 @@ export default function TransactionsPage() {
             <option value="INCOME">Income Only</option>
             <option value="EXPENSE">Expenses Only</option>
           </select>
+          
+          <select
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Years</option>
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+          </select>
+          
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Months</option>
+            <option value="01">January</option>
+            <option value="02">February</option>
+            <option value="03">March</option>
+            <option value="04">April</option>
+            <option value="05">May</option>
+            <option value="06">June</option>
+            <option value="07">July</option>
+            <option value="08">August</option>
+            <option value="09">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+          
+          {/* Clear Filters Button */}
+          {(filterCategory || filterType || filterMonth || filterYear) && (
+            <button
+              onClick={() => {
+                setFilterCategory('');
+                setFilterType('');
+                setFilterMonth('');
+                setFilterYear('');
+              }}
+              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors text-sm"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
 
         <button
@@ -366,7 +417,7 @@ export default function TransactionsPage() {
                   value={formData.amount}
                   onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
+                  placeholder="0.00 NGN"
                   required
                 />
               </div>

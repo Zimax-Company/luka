@@ -1,22 +1,12 @@
 import Navigation from '@/components/Navigation'
+import ReportsPage from '@/components/ReportsPage'
 
 export default function Reports() {
   return (
     <div className="min-h-screen bg-black text-white">
       <Navigation />
       <main className="bg-black">
-        <div className="container mx-auto px-6 py-8 max-w-4xl">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 text-white">Reports</h1>
-            <p className="text-gray-400">Analyze your financial data</p>
-          </div>
-          
-          <div className="border border-gray-800 rounded-lg bg-gray-900/30 p-8 text-center">
-            <span className="text-6xl mb-4 block">📊</span>
-            <h2 className="text-xl font-semibold text-white mb-2">Reports Coming Soon</h2>
-            <p className="text-gray-400">Advanced analytics and reporting features</p>
-          </div>
-        </div>
+        <ReportsPage />
       </main>
     </div>
   )

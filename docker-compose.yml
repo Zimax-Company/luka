@@ -1,39 +1,70 @@
 version: '3.8'
 
 services:
+  # Development service (NODE_ENV=development automatically)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${APP_DEV_PORT}:3000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - luka-network
+    depends_on:
+      - mysql
+
+  # Production service (NODE_ENV=production automatically)
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PROD_PORT}:3000"
+    env_file:
+      - .env
+    networks:
+      - luka-network
+    depends_on:
+      - mysql
+
   # MySQL Database
   mysql:
     image: mysql:8.0
-    container_name: luka-mysql
+    container_name: ${MYSQL_CONTAINER_NAME}
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: luka_categories
-      MYSQL_USER: luka_user
-      MYSQL_PASSWORD: luka_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - luka-network
 
-  # Next.js Application with Database
+  # Next.js Application with Database (alternative configuration)
   app:
     build: .
-    container_name: luka-app
+    container_name: ${APP_CONTAINER_NAME}
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - DB_USER=luka_user
-      - DB_PASSWORD=luka_password
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
       - DB_HOST=mysql
-      - DB_NAME=luka_categories
+      - DB_NAME=${MYSQL_DATABASE}
       - DB_PORT=3306
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
     ports:
-      - "3000:3000"
+      - "${APP_DEV_PORT}:3000"
     depends_on:
       - mysql
     networks:

@@ -44,10 +44,10 @@ ON DUPLICATE KEY UPDATE
 
 -- Insert Sample Transactions
 INSERT INTO transactions (id, date, note, category_id, amount) VALUES
-('1', '2026-03-14', 'Monthly salary payment', '1', 3500.00),
-('2', '2026-03-13', 'Lunch at restaurant', '2', 25.00),
-('3', '2026-03-12', 'Gas station fill-up', '3', 45.00),
-('4', '2026-03-11', 'Freelance project payment', '4', 800.00),
+('1', '2026-03-14', 'Monthly salary payment', '1', 350000.00),
+('2', '2026-03-13', 'Lunch at restaurant', '2', 2500.00),
+('3', '2026-03-12', 'Gas station fill-up', '3', 15000.00),
+('4', '2026-03-11', 'Freelance project payment', '4', 80000.00),
 ('5', '2026-03-10', 'Movie tickets', '5', 30.00),
 ('6', '2026-03-09', 'Electricity bill', '6', 120.00),
 ('7', '2026-03-08', 'Stock dividend', '7', 150.00),

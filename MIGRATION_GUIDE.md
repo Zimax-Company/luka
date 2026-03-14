@@ -1,40 +1,167 @@
-# Database Migration Guide for Vercel Deployment
+# Laravel-Style Database Migration Guide
 
-## Problem
-Vercel doesn't automatically run database migrations during deployment. You need to handle database schema setup manually.
+## Overview
+This application now uses a Laravel-style migration system that tracks and versions database changes. This approach preserves production data while allowing for incremental schema updates.
 
-## Solutions
+## Migration System Features
 
-### Option 1: Schema Deployment + Migration Endpoints (Recommended)
+- ✅ **Versioned Migrations**: Each migration has a unique ID and timestamp
+- ✅ **Batch Tracking**: Migrations are grouped in batches for easy rollback
+- ✅ **Production Safe**: Only runs unexecuted migrations
+- ✅ **Rollback Support**: Can rollback the last batch of migrations
+- ✅ **Migration Status**: Check which migrations have been run
+- ✅ **No Data Loss**: Schema-only changes, preserves existing data
 
-We've created two endpoints to handle database setup:
+## Migration Commands
 
-#### **Step 1: Deploy Database Schema**
-**GET /api/deploy-schema** - Create database tables and schema (Serverless-friendly)
+### CLI Commands (Development)
 ```bash
-curl https://your-vercel-app.vercel.app/api/deploy-schema
+# Check migration status
+npm run migrate:status
+
+# Run pending migrations
+npm run migrate:run
+
+# Rollback last batch
+npm run migrate:rollback
+
+# Create new migration file
+npm run migrate:make create_users_table
 ```
 
-This endpoint:
-- ✅ Uses Prisma Client with raw SQL (no shell commands)
-- ✅ Works within Vercel serverless constraints
-- ✅ Creates tables directly with CREATE TABLE statements
-- ✅ Checks database connection and existing schema
-- ✅ Returns current data counts
-- ✅ Handles both schema creation and verification
+### API Endpoints (Production)
 
-#### **Step 2: Migrate/Seed Data** 
-**GET /api/migrate** - Check database status and seed if empty
+#### **Check Migration Status**
+**GET /api/migrate** - Check what migrations are pending/executed
 ```bash
-curl https://your-vercel-app.vercel.app/api/migrate
+curl https://your-app.vercel.app/api/migrate
 ```
 
-**POST /api/migrate** - Force reset and reseed database
-```bash
-curl -X POST https://your-vercel-app.vercel.app/api/migrate
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "status": {
+      "total": 3,
+      "executed": 2,
+      "pending": 1,
+      "lastBatch": 2
+    },
+    "pendingMigrations": [
+      {
+        "id": "003_add_user_preferences",
+        "description": "Add user preferences table"
+      }
+    ],
+    "executedMigrations": [
+      "001_create_migrations_table",
+      "002_create_categories_table"
+    ],
+    "upToDate": false
+  }
+}
 ```
 
-### Option 2: Manual Database Setup (Production)
+#### **Run Pending Migrations**
+**POST /api/migrate** - Execute unrun migrations
+```bash
+curl -X POST https://your-app.vercel.app/api/migrate
+```
+
+#### **Rollback Last Batch**
+**POST /api/migrate/rollback** - Rollback last batch of migrations
+```bash
+curl -X POST https://your-app.vercel.app/api/migrate/rollback
+```
+
+## Migration Workflow
+
+### Development Workflow
+1. **Create Migration**: `npm run migrate:make create_new_feature_table`
+2. **Edit Migration**: Add your `up()` and `down()` logic to the generated file
+3. **Run Migration**: `npm run migrate:run`
+4. **Check Status**: `npm run migrate:status`
+
+### Production Deployment Workflow
+1. **Deploy Code**: Deploy to Vercel with new migration files
+2. **Run Migrations**: `curl -X POST https://your-app.vercel.app/api/migrate`
+3. **Verify**: `curl https://your-app.vercel.app/api/migrate` (check status)
+
+### Rollback Workflow
+If something goes wrong:
+```bash
+# Development
+npm run migrate:rollback
+
+# Production
+curl -X POST https://your-app.vercel.app/api/migrate/rollback
+```
+
+## Migration File Structure
+
+Each migration file follows this pattern:
+```typescript
+/**
+ * Migration: Create users table
+ * Created: 2026-03-14
+ */
+
+export const migration = {
+  id: '20260314120000_create_users_table',
+  description: 'Create users table with authentication fields',
+  
+  async up(prisma: any) {
+    console.log('📊 Creating users table...');
+    
+    await prisma.$executeRaw`
+      CREATE TABLE users (
+        id VARCHAR(191) NOT NULL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+      )
+    `;
+    
+    console.log('✅ Users table created');
+  },
+  
+  async down(prisma: any) {
+    console.log('🗑️ Dropping users table...');
+    await prisma.$executeRaw`DROP TABLE IF EXISTS users`;
+    console.log('✅ Users table dropped');
+  }
+};
+```
+
+## Migration Tracking
+
+The system uses a `migrations` table to track:
+- **id**: Unique migration identifier
+- **batch**: Batch number for grouping related migrations
+- **executed_at**: When the migration was executed
+
+This ensures:
+- Migrations run only once
+- Rollbacks affect the correct group
+- Production data is preserved
+- Schema changes are versioned
+
+## Existing Migration Files
+
+The system comes with these initial migrations:
+1. `001_create_migrations_table.ts` - Creates the migration tracking table
+2. `002_create_categories_table.ts` - Creates the categories table
+3. `003_create_transactions_table.ts` - Creates the transactions table
+
+## Benefits over Traditional Approaches
+
+✅ **Production Safe**: Only unrun migrations execute
+✅ **Data Preservation**: Existing data is never touched
+✅ **Version Control**: All schema changes are tracked in code
+✅ **Team Collaboration**: Migrations are shared via git
+✅ **Rollback Capability**: Easy to undo problematic changes
+✅ **Environment Consistency**: Same schema across dev/staging/production
 
 1. **Set up your production database** (MySQL on PlanetScale, Supabase, etc.)
 
@@ -95,8 +222,9 @@ Both tables are defined in `prisma/schema.prisma`
 
 ### For fresh deployment:
 1. Deploy to Vercel
-2. Visit `https://your-app.vercel.app/api/migrate`
-3. Check response - should create tables and seed data automatically
+2. Visit `https://your-app.vercel.app/api/deploy-schema` - creates database tables
+3. Visit `https://your-app.vercel.app/api/migrate` - checks schema status
+4. Start using the app - create categories and transactions as needed
 
 ## Migration Endpoint Response Format
 
