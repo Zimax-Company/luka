@@ -5,9 +5,23 @@ Vercel doesn't automatically run database migrations during deployment. You need
 
 ## Solutions
 
-### Option 1: Migration Endpoint (Recommended for Development)
-We've created a `/api/migrate` endpoint that you can call after deployment:
+### Option 1: Schema Deployment + Migration Endpoints (Recommended)
 
+We've created two endpoints to handle database setup:
+
+#### **Step 1: Deploy Database Schema**
+**GET /api/deploy-schema** - Create database tables and schema
+```bash
+curl https://your-vercel-app.vercel.app/api/deploy-schema
+```
+
+This endpoint:
+- ✅ Runs `prisma db push` to create tables
+- ✅ Checks database connection
+- ✅ Returns current data counts
+- ✅ Handles Prisma version warnings
+
+#### **Step 2: Migrate/Seed Data** 
 **GET /api/migrate** - Check database status and seed if empty
 ```bash
 curl https://your-vercel-app.vercel.app/api/migrate
@@ -18,17 +32,13 @@ curl https://your-vercel-app.vercel.app/api/migrate
 curl -X POST https://your-vercel-app.vercel.app/api/migrate
 ```
 
-### Option 2: Manual Database Setup (Recommended for Production)
+### Option 2: Manual Database Setup (Production)
 
 1. **Set up your production database** (MySQL on PlanetScale, Supabase, etc.)
 
-2. **Run migrations manually using Prisma CLI:**
+2. **Run schema deployment:**
 ```bash
-# Push schema to database
 npx prisma db push --accept-data-loss
-
-# Or use migrations (if you have migration files)
-npx prisma migrate deploy
 ```
 
 3. **Generate Prisma client:**
