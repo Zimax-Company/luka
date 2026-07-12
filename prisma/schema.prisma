@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique @db.VarChar(255)
+  name      String   @db.VarChar(255)
+  password  String   @db.VarChar(255) // Will be hashed
+  role      UserRole @default(ADMIN)
+  isActive  Boolean  @default(true) @map("is_active")
+  adminId   String?  @map("admin_id") // Reference to admin user (null for admin users)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  admin    User?  @relation("AdminMembers", fields: [adminId], references: [id], onDelete: Cascade)
+  members  User[] @relation("AdminMembers")
+  
+  // User can own accounts (only admins can create accounts)
+  accounts Account[]
+
+  @@index([email], name: "idx_users_email")
+  @@index([role], name: "idx_users_role")
+  @@index([adminId], name: "idx_users_admin_id")
+  @@index([isActive], name: "idx_users_active")
+  @@map("users")
+}
+
+model Account {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id") // Owner of the account (admin user)
+  name        String      @db.VarChar(255)
+  description String?     @db.Text
+  type        AccountType @default(PERSONAL)
+  currency    String      @default("NGN") @db.VarChar(3)
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  // Relationships
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories   Category[]
+  transactions Transaction[]
+
+  @@index([userId], name: "idx_accounts_user_id")
+  @@index([type], name: "idx_accounts_type")
+  @@index([isActive], name: "idx_accounts_active")
+  @@index([createdAt], name: "idx_accounts_created_at")
+  @@map("accounts")
+}
+
+model Category {
+  id        String      @id @default(cuid())
+  accountId String      @map("account_id")
+  name      String      @db.VarChar(255)
+  type      CategoryType
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  
+  // Relationships
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([accountId, name, type], name: "unique_account_name_type")
+  @@index([accountId], name: "idx_categories_account_id")
+  @@index([type], name: "idx_type")
+  @@index([name], name: "idx_name")
+  @@index([createdAt], name: "idx_created_at")
+  @@map("categories")
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  accountId  String   @map("account_id")
+  date       DateTime @db.Date
+  note       String   @db.Text
+  categoryId String   @map("category_id")
+  amount     Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relationships
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([accountId], name: "idx_transactions_account_id")
+  @@index([date], name: "idx_date")
+  @@index([categoryId], name: "idx_category")
+  @@index([amount], name: "idx_amount")
+  @@index([createdAt], name: "idx_created_at")
+  @@map("transactions")
+}
+
+enum AccountType {
+  PERSONAL
+  BUSINESS
+  SAVINGS
+  CHECKING
+  CREDIT
+  INVESTMENT
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
