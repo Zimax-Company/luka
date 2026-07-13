@@ -1,8 +1,8 @@
 import { Transaction, TransactionWithCategory, CreateTransactionRequest } from '@/types/transaction';
 import { Category } from '@/types/category';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '@/lib/prismaClient';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 export class PrismaTransactionService {
   

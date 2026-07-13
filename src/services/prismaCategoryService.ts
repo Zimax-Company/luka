@@ -1,7 +1,7 @@
 import { Category, CreateCategoryRequest, UpdateCategoryRequest } from '@/types/category';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '@/lib/prismaClient';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 export class PrismaCategoryService {
   

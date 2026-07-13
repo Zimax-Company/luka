@@ -1,7 +1,7 @@
 import { User, UserWithMembers, CreateUserRequest, UpdateUserRequest, UserRole, UserPermissions } from '@/types/user';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '@/lib/prismaClient';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 export class PrismaUserService {
   
