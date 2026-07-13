@@ -16,7 +16,11 @@ const constructDatabaseUrl = () => {
   const dbPort = process.env.DB_PORT || "3306";
   
   if (dbUser && dbPassword && dbHost && dbName) {
-    return `mysql://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
+    // URL-encode user & password so special characters (@ : / ? # etc.) don't
+    // corrupt the connection string / cause spurious auth failures.
+    const u = encodeURIComponent(dbUser);
+    const p = encodeURIComponent(dbPassword);
+    return `mysql://${u}:${p}@${dbHost}:${dbPort}/${dbName}`;
   }
   
   // Fallback to default for development
