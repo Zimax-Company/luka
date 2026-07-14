@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { authFetch } from '@/lib/api';
 
 interface DashboardSummary {
   year: number | 'all';
@@ -54,8 +55,8 @@ export default function DashboardContent() {
 
         const yearQuery = `year=${year}`;
         const [summaryResponse, transactionsResponse] = await Promise.all([
-          fetch(`/api/entries/summary?${yearQuery}`),
-          fetch(`/api/entries?limit=5&${yearQuery}`)
+          authFetch(`/api/entries/summary?${yearQuery}`),
+          authFetch(`/api/entries?limit=5&${yearQuery}`)
         ]);
 
         const summaryData = await summaryResponse.json();

@@ -22,21 +22,79 @@ model User {
   role      UserRole @default(ADMIN)
   isActive  Boolean  @default(true) @map("is_active")
   adminId   String?  @map("admin_id") // Reference to admin user (null for admin users)
+  customerId String? @map("customer_id") // Billable account this user belongs to
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relationships
   admin    User?  @relation("AdminMembers", fields: [adminId], references: [id], onDelete: Cascade)
   members  User[] @relation("AdminMembers")
-  
+  customer Customer? @relation(fields: [customerId], references: [id])
+
   // User can own accounts (only admins can create accounts)
   accounts Account[]
 
   @@index([email], name: "idx_users_email")
   @@index([role], name: "idx_users_role")
   @@index([adminId], name: "idx_users_admin_id")
+  @@index([customerId], name: "idx_users_customer_id")
   @@index([isActive], name: "idx_users_active")
   @@map("users")
+}
+
+// Billable account (tenant). Holds the subscription and the root/owner email.
+// All users sharing a customerId belong to the same billable account, which can
+// therefore have multiple ADMINs. The root user is the one whose email == rootEmail.
+model Customer {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(255)
+  rootEmail String   @map("root_email") @db.VarChar(255)
+  plan      String   @default("FREE") @db.VarChar(50)
+  status    String   @default("ACTIVE") @db.VarChar(50) // active for everyone, for now
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users              User[]
+  subscriptionEvents SubscriptionEvent[]
+
+  @@index([rootEmail], name: "idx_customers_root_email")
+  @@map("customers")
+}
+
+// Subscription/billing history for a billable account (root user only can view).
+model SubscriptionEvent {
+  id         String   @id @default(cuid())
+  customerId String   @map("customer_id")
+  plan       String   @db.VarChar(50)
+  type       String   @db.VarChar(50) // ACTIVATED | PLAN_CHANGED | RENEWED | CANCELLED
+  amount     Decimal? @db.Decimal(10, 2)
+  currency   String?  @db.VarChar(3)
+  note       String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId], name: "idx_subevents_customer")
+  @@index([createdAt], name: "idx_subevents_created")
+  @@map("subscription_events")
+}
+
+// Audit trail of write actions (web, admin-only view). Not FK-linked so logs
+// survive deletion of the referenced resource/user.
+model AuditLog {
+  id         String   @id @default(cuid())
+  customerId String?  @map("customer_id")
+  actorId    String?  @map("actor_id")
+  actorEmail String   @map("actor_email") @db.VarChar(255)
+  action     String   @db.VarChar(20) // CREATE | UPDATE | DELETE
+  resource   String   @db.VarChar(50) // entry | account | category | user
+  resourceId String?  @map("resource_id")
+  summary    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([customerId], name: "idx_audit_customer")
+  @@index([createdAt], name: "idx_audit_created")
+  @@map("audit_logs")
 }
 
 model Account {

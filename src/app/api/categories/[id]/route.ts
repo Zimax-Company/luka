@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaCategoryService } from '@/services/prismaCategoryService';
 import { UpdateCategoryRequest } from '@/types/category';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/categories/[id] - Get category by ID
 export async function GET(
@@ -59,6 +61,8 @@ export async function PUT(
       );
     }
 
+    recordAudit(await getActor(request), 'UPDATE', 'category', id, `Updated category "${category.name}"`);
+
     return NextResponse.json({
       success: true,
       data: category,
@@ -82,6 +86,8 @@ export async function DELETE(
     console.log(`Deleting category with ID: ${id}`);
     
     await PrismaCategoryService.delete(id);
+
+    recordAudit(await getActor(request), 'DELETE', 'category', id, `Deleted category ${id}`);
 
     return NextResponse.json({
       success: true,

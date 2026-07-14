@@ -17,6 +17,7 @@ export interface CreateUserRequest {
   password: string;
   role: UserRole;
   adminId?: string;
+  customerId?: string; // Billable account the invited user belongs to
 }
 
 export interface UpdateUserRequest {

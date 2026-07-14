@@ -14,7 +14,8 @@ interface NavigationProps {
 export default function Navigation({ currentUser, permissions }: NavigationProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { logout } = useAuth()
+  const { logout, currentUser: authUser } = useAuth()
+  const role = currentUser?.role ?? authUser?.role
 
   // Base navigation items
   const baseNavigation = [
@@ -23,12 +24,14 @@ export default function Navigation({ currentUser, permissions }: NavigationProps
     { name: 'Categories', href: '/categories', icon: '📁', permission: null },
     { name: 'Entries', href: '/entries', icon: '💰', permission: 'canCreateTransactions' },
     { name: 'Reports', href: '/reports', icon: '📊', permission: 'canViewReports' },
+    { name: 'Subscription', href: '/subscription', icon: '💳', permission: null },
   ];
 
   // Add user management for admins
   const navigation = [
     ...baseNavigation,
     ...(permissions?.canManageUsers ? [{ name: 'Users', href: '/users', icon: '👥', permission: 'canManageUsers' }] : []),
+    ...(role === 'ADMIN' ? [{ name: 'Audit', href: '/audit', icon: '📋', permission: null }] : []),
     { name: 'Settings', href: '/settings', icon: '⚙️', permission: null },
   ];
 

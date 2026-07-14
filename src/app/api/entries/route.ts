@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
 import { CreateEntryRequest } from '@/types/entry';
 import { parsePagination, paginateArray } from '@/lib/pagination';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // Always use database service (we have MySQL running)
 function getEntryService() {
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
     const year = searchParams.get('year');
     const accountId = searchParams.get('accountId');
+    const search = searchParams.get('search');
 
     let transactions;
 
@@ -64,6 +67,15 @@ export async function GET(request: NextRequest) {
     // Filter by account if specified
     if (accountId) {
       transactions = transactions.filter(transaction => transaction.accountId === accountId);
+    }
+
+    // Keyword search across note and category name
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      transactions = transactions.filter(transaction =>
+        (transaction.note ?? '').toLowerCase().includes(q) ||
+        (transaction.category?.name ?? '').toLowerCase().includes(q)
+      );
     }
 
     // Apply limit if specified (kept for backwards-compatible "recent N" callers)
@@ -130,6 +142,16 @@ export async function POST(request: NextRequest) {
     }
 
     const transaction = await service.create(body);
+
+    const actor = await getActor(request);
+    const kind = transaction.category?.type === 'INCOME' ? 'income' : 'expense';
+    recordAudit(
+      actor,
+      'CREATE',
+      'entry',
+      transaction.id,
+      `Added ${kind} ${Number(transaction.amount)} · ${transaction.category?.name ?? ''}`,
+    );
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Account, AccountWithStats, AccountType, CreateAccountRequest } from '@/types/account';
+import { authFetch } from '@/lib/api';
 
 const ACCOUNT_TYPES = [
   { value: 'PERSONAL' as AccountType, label: '👤 Personal', description: 'Personal finances and expenses' },
@@ -34,14 +35,14 @@ export default function AccountsPage() {
   const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/accounts');
+      const response = await authFetch('/api/accounts');
       if (response.ok) {
         const data = await response.json();
         
         // Fetch stats for each account
         const accountsWithStats = await Promise.all(
           data.data.map(async (account: Account) => {
-            const statsResponse = await fetch(`/api/accounts/${account.id}?withStats=true`);
+            const statsResponse = await authFetch(`/api/accounts/${account.id}?withStats=true`);
             if (statsResponse.ok) {
               const statsData = await statsResponse.json();
               return statsData.data;
@@ -69,7 +70,7 @@ export default function AccountsPage() {
     
     setCreating(true);
     try {
-      const response = await fetch('/api/accounts', {
+      const response = await authFetch('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAccount)

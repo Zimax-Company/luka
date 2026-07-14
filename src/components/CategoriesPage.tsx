@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Category, CreateCategoryRequest, UpdateCategoryRequest } from '@/types/category'
+import { authFetch } from '@/lib/api'
 
 interface CategoryFormProps {
   category?: Category
@@ -89,7 +90,7 @@ export default function CategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories')
+      const response = await authFetch('/api/categories')
       const data = await response.json()
       if (data.success) {
         setCategories(data.data)
@@ -104,7 +105,7 @@ export default function CategoriesPage() {
   const createCategory = async (categoryData: CreateCategoryRequest) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch('/api/categories', {
+      const response = await authFetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categoryData),
@@ -124,7 +125,7 @@ export default function CategoriesPage() {
   const updateCategory = async (id: string, categoryData: UpdateCategoryRequest) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch(`/api/categories/${id}`, {
+      const response = await authFetch(`/api/categories/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categoryData),
@@ -145,7 +146,7 @@ export default function CategoriesPage() {
     if (!confirm('Are you sure you want to delete this category?')) return
     
     try {
-      const response = await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+      const response = await authFetch(`/api/categories/${id}`, { method: 'DELETE' })
       const data = await response.json()
       if (data.success) {
         setCategories(categories.filter(cat => cat.id !== id))

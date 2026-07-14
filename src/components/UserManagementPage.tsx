@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { User, UserWithMembers, CreateUserRequest, UserRole, UserPermissions } from '@/types/user';
+import { authFetch } from '@/lib/api';
 
 interface UserManagementPageProps {
   currentUser: User;
@@ -37,7 +38,7 @@ export default function UserManagementPage({ currentUser, permissions }: UserMan
         url = `/api/users?adminId=${currentUser.adminId}`;
       }
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
       const data = await response.json();
 
       if (data.success) {
@@ -60,7 +61,7 @@ export default function UserManagementPage({ currentUser, permissions }: UserMan
     try {
       console.log('👤 Creating user:', newUser.email);
       
-      const response = await fetch('/api/users', {
+      const response = await authFetch('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +101,7 @@ export default function UserManagementPage({ currentUser, permissions }: UserMan
     try {
       console.log('🗑️ Deactivating user:', userName);
       
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await authFetch(`/api/users/${userId}`, {
         method: 'DELETE'
       });
 

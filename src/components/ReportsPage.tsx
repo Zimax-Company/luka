@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, subMonths, eachMonthOfInterval } from 'date-fns';
+import { authFetch } from '@/lib/api';
 
 interface Transaction {
   id: string;
@@ -67,8 +68,8 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       const [transactionsRes, categoriesRes] = await Promise.all([
-        fetch('/api/entries'),
-        fetch('/api/categories')
+        authFetch('/api/entries'),
+        authFetch('/api/categories')
       ]);
 
       if (transactionsRes.ok) {

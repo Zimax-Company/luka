@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaAccountService } from '@/services/prismaAccountService';
 import { CreateAccountRequest } from '@/types/account';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/accounts - Get all accounts
 export async function GET() {
@@ -49,11 +51,13 @@ export async function POST(request: NextRequest) {
     }
 
     const account = await PrismaAccountService.create(body);
-    
+
+    recordAudit(await getActor(request), 'CREATE', 'account', account.id, `Created account "${account.name}"`);
+
     return NextResponse.json(
-      { 
-        success: true, 
-        data: account, 
+      {
+        success: true,
+        data: account,
         message: 'Account created successfully',
         source: 'database'
       },

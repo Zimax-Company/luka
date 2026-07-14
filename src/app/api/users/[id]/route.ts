@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaUserService } from '@/services/prismaUserService';
 import { UpdateUserRequest } from '@/types/user';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/users/[id] - Get user by ID with optional members
 export async function GET(
@@ -102,8 +104,10 @@ export async function PUT(
       );
     }
     
-    return NextResponse.json({ 
-      success: true, 
+    recordAudit(await getActor(request), 'UPDATE', 'user', id, `Updated user ${updatedUser.email}`);
+
+    return NextResponse.json({
+      success: true,
       data: updatedUser,
       message: `User ${updatedUser.name} updated successfully`
     });
@@ -132,9 +136,11 @@ export async function DELETE(
     console.log('👤 Deactivating user:', id);
 
     await PrismaUserService.delete(id);
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    recordAudit(await getActor(request), 'DELETE', 'user', id, `Deactivated user ${id}`);
+
+    return NextResponse.json({
+      success: true,
       message: 'User deactivated successfully'
     });
     

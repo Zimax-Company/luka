@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
+import { authFetch } from '@/lib/api';
 
 interface TransactionsSummary {
   totals: {
@@ -38,6 +39,8 @@ export default function EntriesPage() {
   const [filterType, setFilterType] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [filterYear, setFilterYear] = useState<string>('');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [search, setSearch] = useState<string>('');
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -62,8 +65,9 @@ export default function EntriesPage() {
       if (filterType) params.append('type', filterType);
       if (filterMonth) params.append('month', filterMonth);
       if (filterYear) params.append('year', filterYear);
-      
-      const response = await fetch(`/api/entries?${params.toString()}`);
+      if (search) params.append('search', search);
+
+      const response = await authFetch(`/api/entries?${params.toString()}`);
       const data = await response.json();
       
       if (data.success) {
@@ -78,7 +82,7 @@ export default function EntriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
+      const response = await authFetch('/api/categories');
       const data = await response.json();
       
       if (data.success) {
@@ -91,7 +95,7 @@ export default function EntriesPage() {
 
   const fetchAccounts = async () => {
     try {
-      const response = await fetch('/api/accounts');
+      const response = await authFetch('/api/accounts');
       const data = await response.json();
       
       if (data.success) {
@@ -108,7 +112,7 @@ export default function EntriesPage() {
 
   const fetchSummary = async () => {
     try {
-      const response = await fetch('/api/entries/summary');
+      const response = await authFetch('/api/entries/summary');
       const data = await response.json();
       
       if (data.success) {
@@ -127,7 +131,15 @@ export default function EntriesPage() {
     };
     
     loadData();
-  }, [filterCategory, filterType, filterMonth, filterYear]);
+  }, [filterCategory, filterType, filterMonth, filterYear, search]);
+
+  // Debounce the search input (~300ms) before applying it as a filter.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
 
   // Form handlers
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,7 +152,7 @@ export default function EntriesPage() {
       
       const method = editingTransaction ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,7 +191,7 @@ export default function EntriesPage() {
     if (!confirm('Are you sure you want to delete this entry?')) return;
     
     try {
-      const response = await fetch(`/api/entries/${id}`, {
+      const response = await authFetch(`/api/entries/${id}`, {
         method: 'DELETE'
       });
       
@@ -300,6 +312,21 @@ export default function EntriesPage() {
       {/* Actions and Filters */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearch(searchInput.trim());
+            }}
+          >
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search notes & categories…"
+              className="w-full md:w-64 px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </form>
+
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -356,13 +383,15 @@ export default function EntriesPage() {
           </select>
           
           {/* Clear Filters Button */}
-          {(filterCategory || filterType || filterMonth || filterYear) && (
+          {(filterCategory || filterType || filterMonth || filterYear || searchInput) && (
             <button
               onClick={() => {
                 setFilterCategory('');
                 setFilterType('');
                 setFilterMonth('');
                 setFilterYear('');
+                setSearchInput('');
+                setSearch('');
               }}
               className="px-3 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-foreground rounded-lg transition-colors text-sm"
             >

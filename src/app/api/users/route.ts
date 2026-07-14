@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaUserService } from '@/services/prismaUserService';
 import { CreateUserRequest } from '@/types/user';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/users - Get all users or filter by role
 export async function GET(request: NextRequest) {
@@ -83,10 +85,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newUser = await PrismaUserService.create(userData);
-    
-    return NextResponse.json({ 
-      success: true, 
+    // Invited users belong to the creator's billable account (and admin), so a
+    // customer can have multiple admins/members under one subscription.
+    const actor = await getActor(request);
+    const newUser = await PrismaUserService.create({
+      ...userData,
+      customerId: userData.customerId ?? actor?.customerId ?? undefined,
+      adminId: userData.adminId ?? actor?.id,
+    });
+
+    recordAudit(actor, 'CREATE', 'user', newUser.id, `Invited ${newUser.email} as ${newUser.role}`);
+
+    return NextResponse.json({
+      success: true,
       data: newUser,
       message: `User ${newUser.name} created successfully`
     }, { status: 201 });

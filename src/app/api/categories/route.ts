@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaCategoryService } from '@/services/prismaCategoryService';
 import { CreateCategoryRequest } from '@/types/category';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // Always use database service (we have MySQL running)
 function getCategoryService() {
@@ -49,11 +51,13 @@ export async function POST(request: NextRequest) {
     }
 
     const category = await service.create(body);
-    
+
+    recordAudit(await getActor(request), 'CREATE', 'category', category.id, `Created ${category.type} category "${category.name}"`);
+
     return NextResponse.json(
-      { 
-        success: true, 
-        data: category, 
+      {
+        success: true,
+        data: category,
         message: 'Category created successfully',
         source: 'database'
       },

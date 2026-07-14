@@ -139,6 +139,7 @@ export class PrismaUserService {
         password: hashedPassword,
         role: data.role,
         adminId: data.adminId,
+        customerId: data.customerId,
         isActive: true
       }
     });

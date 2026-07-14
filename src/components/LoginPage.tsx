@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { UserRole, AuthResponse } from '@/types/user';
+import { authFetch } from '@/lib/api';
 
 interface LoginPageProps {
   onLogin: (authData: AuthResponse) => void;
@@ -21,7 +22,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     try {
       console.log('🔐 Attempting login:', email);
       
-      const response = await fetch('/api/auth/login', {
+      const response = await authFetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

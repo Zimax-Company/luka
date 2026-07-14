@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaAccountService } from '@/services/prismaAccountService';
 import { UpdateAccountRequest } from '@/types/account';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/accounts/[id] - Get account by ID
 export async function GET(
@@ -71,6 +73,8 @@ export async function PUT(
       );
     }
 
+    recordAudit(await getActor(request), 'UPDATE', 'account', id, `Updated account "${account.name}"`);
+
     return NextResponse.json({
       success: true,
       data: account,
@@ -104,7 +108,9 @@ export async function DELETE(
     }
     
     await PrismaAccountService.delete(id);
-    
+
+    recordAudit(await getActor(request), 'DELETE', 'account', id, `Deactivated account ${id}`);
+
     return NextResponse.json({
       success: true,
       message: 'Account deactivated successfully',

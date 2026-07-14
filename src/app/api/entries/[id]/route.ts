@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
 import { UpdateEntryRequest } from '@/types/entry';
+import { getActor } from '@/lib/actor';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/entries/[id] - Get entry by ID
 export async function GET(
@@ -67,6 +69,14 @@ export async function PUT(
       );
     }
 
+    recordAudit(
+      await getActor(request),
+      'UPDATE',
+      'entry',
+      id,
+      `Updated entry ${Number(transaction.amount)} · ${transaction.category?.name ?? ''}`,
+    );
+
     return NextResponse.json({
       success: true,
       data: transaction,
@@ -109,6 +119,8 @@ export async function DELETE(
     console.log(`Deleting transaction with ID: ${id}`);
     
     await PrismaEntryService.delete(id);
+
+    recordAudit(await getActor(request), 'DELETE', 'entry', id, `Deleted entry ${id}`);
 
     return NextResponse.json({
       success: true,
