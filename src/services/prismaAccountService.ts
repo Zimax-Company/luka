@@ -20,7 +20,7 @@ export class PrismaAccountService {
       SELECT 
         COALESCE(SUM(CASE WHEN c.type = 'INCOME' THEN t.amount ELSE 0 END), 0) as total_income,
         COALESCE(SUM(CASE WHEN c.type = 'EXPENSE' THEN t.amount ELSE 0 END), 0) as total_expenses
-      FROM transactions t
+      FROM entries t
       JOIN categories c ON t.category_id = c.id
       WHERE t.account_id = ${accountId}
     `;
@@ -113,7 +113,7 @@ export class PrismaAccountService {
         COALESCE(SUM(CASE WHEN c.type = 'INCOME' THEN t.amount ELSE 0 END), 0) as total_income,
         COALESCE(SUM(CASE WHEN c.type = 'EXPENSE' THEN t.amount ELSE 0 END), 0) as total_expenses,
         COUNT(t.id) as transaction_count
-      FROM transactions t
+      FROM entries t
       JOIN categories c ON t.category_id = c.id
       WHERE t.account_id = ${id}
     `;
