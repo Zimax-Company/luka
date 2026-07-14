@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaTransactionService } from '@/services/prismaTransactionService';
-import { UpdateTransactionRequest } from '@/types/transaction';
+import { PrismaEntryService } from '@/services/prismaEntryService';
+import { UpdateEntryRequest } from '@/types/entry';
 
-// GET /api/transactions/[id] - Get transaction by ID
+// GET /api/entries/[id] - Get entry by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -11,7 +11,7 @@ export async function GET(
     const { id } = await params;
     console.log(`Getting transaction with ID: ${id}`);
     
-    const transaction = await PrismaTransactionService.getById(id);
+    const transaction = await PrismaEntryService.getById(id);
 
     if (!transaction) {
       return NextResponse.json(
@@ -43,7 +43,7 @@ export async function GET(
   }
 }
 
-// PUT /api/transactions/[id] - Update transaction
+// PUT /api/entries/[id] - Update entry
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -52,9 +52,9 @@ export async function PUT(
     const { id } = await params;
     console.log(`Updating transaction with ID: ${id}`);
     
-    const body: UpdateTransactionRequest = await request.json();
+    const body: UpdateEntryRequest = await request.json();
 
-    const transaction = await PrismaTransactionService.update(id, body);
+    const transaction = await PrismaEntryService.update(id, body);
 
     if (!transaction) {
       return NextResponse.json(
@@ -99,7 +99,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/transactions/[id] - Delete transaction
+// DELETE /api/entries/[id] - Delete entry
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -108,7 +108,7 @@ export async function DELETE(
     const { id } = await params;
     console.log(`Deleting transaction with ID: ${id}`);
     
-    await PrismaTransactionService.delete(id);
+    await PrismaEntryService.delete(id);
 
     return NextResponse.json({
       success: true,

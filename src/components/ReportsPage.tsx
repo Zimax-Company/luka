@@ -67,7 +67,7 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       const [transactionsRes, categoriesRes] = await Promise.all([
-        fetch('/api/transactions'),
+        fetch('/api/entries'),
         fetch('/api/categories')
       ]);
 

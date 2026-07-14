@@ -1,12 +1,12 @@
 import Navigation from '@/components/Navigation';
-import TransactionsPage from '@/components/TransactionsPage';
+import EntriesPage from '@/components/EntriesPage';
 
-export default function Transactions() {
+export default function Entries() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navigation />
       <main className="bg-background">
-        <TransactionsPage />
+        <EntriesPage />
       </main>
     </div>
   );

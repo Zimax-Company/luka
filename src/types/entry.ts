@@ -1,4 +1,4 @@
-export interface Transaction {
+export interface Entry {
   id: string;
   accountId: string;
   date: string; // ISO date string
@@ -9,23 +9,23 @@ export interface Transaction {
   updatedAt: string;
 }
 
-export interface CreateTransactionRequest {
+export interface CreateEntryRequest {
   accountId: string;
   date: string;
-  note: string;
+  note?: string;
   categoryId: string;
   amount: number;
 }
 
-export interface UpdateTransactionRequest {
+export interface UpdateEntryRequest {
   date?: string;
   note?: string;
   categoryId?: string;
   amount?: number;
 }
 
-// Extended transaction with category details for API responses
-export interface TransactionWithCategory extends Transaction {
+// Extended entry with category details for API responses
+export interface EntryWithCategory extends Entry {
   category: {
     id: string;
     name: string;

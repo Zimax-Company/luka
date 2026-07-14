@@ -53,7 +53,7 @@ model Account {
   // Relationships
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   categories   Category[]
-  transactions Transaction[]
+  entries      Entry[]
 
   @@index([userId], name: "idx_accounts_user_id")
   @@index([type], name: "idx_accounts_type")
@@ -72,7 +72,7 @@ model Category {
   
   // Relationships
   account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  entries      Entry[]
 
   @@unique([accountId, name, type], name: "unique_account_name_type")
   @@index([accountId], name: "idx_categories_account_id")
@@ -82,7 +82,7 @@ model Category {
   @@map("categories")
 }
 
-model Transaction {
+model Entry {
   id         String   @id @default(cuid())
   accountId  String   @map("account_id")
   date       DateTime @db.Date
@@ -101,7 +101,7 @@ model Transaction {
   @@index([categoryId], name: "idx_category")
   @@index([amount], name: "idx_amount")
   @@index([createdAt], name: "idx_created_at")
-  @@map("transactions")
+  @@map("entries")
 }
 
 enum AccountType {

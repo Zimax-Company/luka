@@ -21,7 +21,7 @@ export default function Navigation({ currentUser, permissions }: NavigationProps
     { name: 'Dashboard', href: '/', icon: '🏠', permission: null },
     { name: 'Accounts', href: '/accounts', icon: '🏦', permission: 'canEditAccounts' },
     { name: 'Categories', href: '/categories', icon: '📁', permission: null },
-    { name: 'Transactions', href: '/transactions', icon: '💰', permission: 'canCreateTransactions' },
+    { name: 'Entries', href: '/entries', icon: '💰', permission: 'canCreateTransactions' },
     { name: 'Reports', href: '/reports', icon: '📊', permission: 'canViewReports' },
   ];
 

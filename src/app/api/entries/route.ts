@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaTransactionService } from '@/services/prismaTransactionService';
-import { CreateTransactionRequest } from '@/types/transaction';
+import { PrismaEntryService } from '@/services/prismaEntryService';
+import { CreateEntryRequest } from '@/types/entry';
 import { parsePagination, paginateArray } from '@/lib/pagination';
 
 // Always use database service (we have MySQL running)
-function getTransactionService() {
-  return PrismaTransactionService;
+function getEntryService() {
+  return PrismaEntryService;
 }
 
-// GET /api/transactions - Get all transactions
+// GET /api/entries - Get all entries
 export async function GET(request: NextRequest) {
   try {
     console.log('Getting all transactions from database...');
     
-    const service = getTransactionService();
+    const service = getEntryService();
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const startDate = searchParams.get('startDate');
@@ -109,21 +109,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/transactions - Create new transaction
+// POST /api/entries - Create new entry
 export async function POST(request: NextRequest) {
   try {
-    console.log('Creating new transaction...');
-    const service = getTransactionService();
+    console.log('Creating new entry...');
+    const service = getEntryService();
 
-    const body: CreateTransactionRequest = await request.json();
+    const body: CreateEntryRequest = await request.json();
 
-    // Validate required fields
-    if (!body.date || !body.note || !body.categoryId || body.amount === undefined) {
+    // Validate required fields (note is optional)
+    if (!body.date || !body.categoryId || body.amount === undefined) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Missing required fields',
-          message: 'date, note, categoryId, and amount are required'
+          message: 'date, categoryId, and amount are required'
         },
         { status: 400 }
       );

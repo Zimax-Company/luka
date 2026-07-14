@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaTransactionService } from '@/services/prismaTransactionService';
+import { PrismaEntryService } from '@/services/prismaEntryService';
 
-// GET /api/transactions/summary - Get transaction summary/statistics.
+// GET /api/entries/summary - Get entry summary/statistics.
 // Supports ?year=YYYY to scope the summary to a single calendar year, or
 // ?year=all for every year. Also returns the list of years that have data so
 // clients can render a year filter (dashboards default to the current year).
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get('year');
 
-    const all = await PrismaTransactionService.getAll();
+    const all = await PrismaEntryService.getAll();
 
     // Distinct years present in the data, newest first.
     const availableYears = Array.from(

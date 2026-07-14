@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Transaction, TransactionWithCategory } from '@/types/transaction';
+import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 
@@ -25,15 +25,15 @@ interface TransactionsSummary {
   };
 }
 
-export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
+export default function EntriesPage() {
+  const [transactions, setTransactions] = useState<EntryWithCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [summary, setSummary] = useState<TransactionsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<TransactionWithCategory | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<EntryWithCategory | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -63,7 +63,7 @@ export default function TransactionsPage() {
       if (filterMonth) params.append('month', filterMonth);
       if (filterYear) params.append('year', filterYear);
       
-      const response = await fetch(`/api/transactions?${params.toString()}`);
+      const response = await fetch(`/api/entries?${params.toString()}`);
       const data = await response.json();
       
       if (data.success) {
@@ -108,7 +108,7 @@ export default function TransactionsPage() {
 
   const fetchSummary = async () => {
     try {
-      const response = await fetch('/api/transactions/summary');
+      const response = await fetch('/api/entries/summary');
       const data = await response.json();
       
       if (data.success) {
@@ -135,8 +135,8 @@ export default function TransactionsPage() {
     
     try {
       const url = editingTransaction 
-        ? `/api/transactions/${editingTransaction.id}`
-        : '/api/transactions';
+        ? `/api/entries/${editingTransaction.id}`
+        : '/api/entries';
       
       const method = editingTransaction ? 'PUT' : 'POST';
       
@@ -163,7 +163,7 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleEdit = (transaction: TransactionWithCategory) => {
+  const handleEdit = (transaction: EntryWithCategory) => {
     setEditingTransaction(transaction);
     setFormData({
       accountId: transaction.accountId,
@@ -176,10 +176,10 @@ export default function TransactionsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    if (!confirm('Are you sure you want to delete this entry?')) return;
     
     try {
-      const response = await fetch(`/api/transactions/${id}`, {
+      const response = await fetch(`/api/entries/${id}`, {
         method: 'DELETE'
       });
       
@@ -227,7 +227,7 @@ export default function TransactionsPage() {
     return (
       <div className="container mx-auto px-6 py-8 max-w-6xl">
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-lg text-muted-foreground">Loading transactions...</div>
+          <div className="text-lg text-muted-foreground">Loading entries...</div>
         </div>
       </div>
     );
@@ -237,7 +237,7 @@ export default function TransactionsPage() {
     <div className="container mx-auto px-6 py-8 max-w-6xl">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 text-foreground">Transactions</h1>
+        <h1 className="text-3xl font-bold mb-2 text-foreground">Entries</h1>
         <p className="text-muted-foreground">Track your income and expenses</p>
       </div>
 
@@ -263,7 +263,7 @@ export default function TransactionsPage() {
               <h3 className="text-lg font-semibold text-foreground">Total Income</h3>
             </div>
             <p className="text-3xl font-bold text-green-400">{formatCurrency(summary.totals.income)}</p>
-            <p className="text-sm text-muted-foreground">{summary.statistics.incomeTransactions} transactions</p>
+            <p className="text-sm text-muted-foreground">{summary.statistics.incomeTransactions} entries</p>
           </div>
 
           <div className="border border-border rounded-lg bg-card p-6">
@@ -272,7 +272,7 @@ export default function TransactionsPage() {
               <h3 className="text-lg font-semibold text-foreground">Total Expenses</h3>
             </div>
             <p className="text-3xl font-bold text-red-400">{formatCurrency(summary.totals.expenses)}</p>
-            <p className="text-sm text-muted-foreground">{summary.statistics.expenseTransactions} transactions</p>
+            <p className="text-sm text-muted-foreground">{summary.statistics.expenseTransactions} entries</p>
           </div>
 
           <div className="border border-border rounded-lg bg-card p-6">
@@ -289,7 +289,7 @@ export default function TransactionsPage() {
           <div className="border border-border rounded-lg bg-card p-6">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-2xl">📊</span>
-              <h3 className="text-lg font-semibold text-foreground">Total Transactions</h3>
+              <h3 className="text-lg font-semibold text-foreground">Total Entries</h3>
             </div>
             <p className="text-3xl font-bold text-blue-400">{summary.statistics.totalTransactions}</p>
             <p className="text-sm text-muted-foreground">Last: {formatDate(summary.statistics.lastTransactionDate)}</p>
@@ -376,7 +376,7 @@ export default function TransactionsPage() {
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <span className="text-lg">+</span>
-          Add Transaction
+          Add Entry
         </button>
       </div>
 
@@ -385,7 +385,7 @@ export default function TransactionsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg border border-border p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4 text-foreground">
-              {editingTransaction ? 'Edit Transaction' : 'Add New Transaction'}
+              {editingTransaction ? 'Edit Entry' : 'Add New Entry'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -430,8 +430,7 @@ export default function TransactionsPage() {
                   value={formData.note}
                   onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
                   className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter transaction description"
-                  required
+                  placeholder="Enter note (optional)"
                 />
               </div>
 
@@ -492,19 +491,19 @@ export default function TransactionsPage() {
       {/* Transactions Table */}
       <div className="border border-border rounded-lg bg-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-xl font-semibold text-foreground">Recent Transactions</h2>
+          <h2 className="text-xl font-semibold text-foreground">Recent Entries</h2>
         </div>
 
         {transactions.length === 0 ? (
           <div className="p-8 text-center">
             <span className="text-4xl mb-4 block">📝</span>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Transactions Found</h3>
-            <p className="text-muted-foreground mb-4">Start by adding your first transaction</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">No Entries Found</h3>
+            <p className="text-muted-foreground mb-4">Start by adding your first entry</p>
             <button
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >
-              Add Transaction
+              Add Entry
             </button>
           </div>
         ) : (

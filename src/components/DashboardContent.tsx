@@ -54,8 +54,8 @@ export default function DashboardContent() {
 
         const yearQuery = `year=${year}`;
         const [summaryResponse, transactionsResponse] = await Promise.all([
-          fetch(`/api/transactions/summary?${yearQuery}`),
-          fetch(`/api/transactions?limit=5&${yearQuery}`)
+          fetch(`/api/entries/summary?${yearQuery}`),
+          fetch(`/api/entries?limit=5&${yearQuery}`)
         ]);
 
         const summaryData = await summaryResponse.json();
@@ -169,7 +169,7 @@ export default function DashboardContent() {
               {formatCurrency(summary.totals.expenses)}
             </p>
             <p className="text-sm text-muted-foreground">
-              {summary.statistics.expenseTransactions} transactions
+              {summary.statistics.expenseTransactions} entries
             </p>
           </div>
 
@@ -203,11 +203,11 @@ export default function DashboardContent() {
               <span className="ml-auto text-muted-foreground">→</span>
             </Link>
             <Link
-              href="/transactions"
+              href="/entries"
               className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:opacity-80 transition-colors text-foreground"
             >
               <span className="text-xl">💰</span>
-              <span>Add Transaction</span>
+              <span>Add Entry</span>
               <span className="ml-auto text-muted-foreground">→</span>
             </Link>
             <Link
@@ -226,7 +226,7 @@ export default function DashboardContent() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold text-foreground">Recent Activity</h3>
             <Link
-              href="/transactions"
+              href="/entries"
               className="text-blue-500 hover:opacity-80 text-sm"
             >
               View All
@@ -236,12 +236,12 @@ export default function DashboardContent() {
           {recentTransactions.length === 0 ? (
             <div className="text-center py-8">
               <span className="text-4xl mb-4 block">📝</span>
-              <p className="text-muted-foreground mb-4">No transactions for this period</p>
+              <p className="text-muted-foreground mb-4">No entries for this period</p>
               <Link
-                href="/transactions"
+                href="/entries"
                 className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
               >
-                Add First Transaction
+                Add First Entry
               </Link>
             </div>
           ) : (
@@ -280,7 +280,7 @@ export default function DashboardContent() {
                 <div key={category} className="flex items-center justify-between p-3 rounded-lg bg-muted">
                   <div>
                     <p className="text-foreground text-sm font-medium">{category}</p>
-                    <p className="text-muted-foreground text-xs">{data.count} transactions</p>
+                    <p className="text-muted-foreground text-xs">{data.count} entries</p>
                   </div>
                   <span className={`font-medium ${data.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
                     {formatCurrency(Math.abs(data.total))}

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       try {
         console.log('🔍 Checking if database schema exists...');
         const categoryCount = await prisma.category.count();
-        const transactionCount = await prisma.transaction.count();
+        const transactionCount = await prisma.entry.count();
         
         console.log('✅ Database schema exists and is accessible');
         console.log(`📈 Current data: ${categoryCount} categories, ${transactionCount} transactions`);
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           
           // Test the newly created schema
           const newCategoryCount = await prisma.category.count();
-          const newTransactionCount = await prisma.transaction.count();
+          const newTransactionCount = await prisma.entry.count();
           
           await prisma.$disconnect();
           
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       
       // Verify the new schema
       const categoryCount = await prisma.category.count();
-      const transactionCount = await prisma.transaction.count();
+      const transactionCount = await prisma.entry.count();
       
       await prisma.$disconnect();
       

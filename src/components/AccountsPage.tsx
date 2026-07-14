@@ -247,7 +247,7 @@ export default function AccountsPage() {
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <a
-                      href={`/transactions?account=${selectedAccount.id}`}
+                      href={`/entries?account=${selectedAccount.id}`}
                       className="bg-muted hover:bg-accent border border-border rounded-lg p-4 text-center transition-colors"
                     >
                       <div className="text-2xl mb-2">💳</div>

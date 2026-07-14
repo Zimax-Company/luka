@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaTransactionService } from '@/services/prismaTransactionService';
+import { PrismaEntryService } from '@/services/prismaEntryService';
 
 // GET /api/reports/summary - Get financial summary data for reports
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     
     // Get all transactions
-    const allTransactions = await PrismaTransactionService.getAll();
+    const allTransactions = await PrismaEntryService.getAll();
     console.log(`✅ Found ${allTransactions.length} total transactions`);
     
     // Filter by date range if provided
