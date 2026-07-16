@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, subMonths, eachMonthOfInterval } from 'date-fns';
 import { authFetch } from '@/lib/api';
 
@@ -47,6 +47,22 @@ interface DateRange {
   endDate: string;
 }
 
+interface TrendPoint {
+  month: number;
+  label: string;
+  total: number;
+  count: number;
+}
+
+interface TrendData {
+  categoryName: string | null;
+  categoryType: 'INCOME' | 'EXPENSE' | null;
+  year: number;
+  points: TrendPoint[];
+}
+
+const CURRENT_YEAR = new Date().getFullYear();
+
 const EXPENSE_COLORS = ['#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#7f1d1d'];
 const INCOME_COLORS = ['#10b981', '#059669', '#047857', '#065f46', '#064e3b'];
 
@@ -60,6 +76,14 @@ export default function ReportsPage() {
   });
   const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'quarter' | 'year' | 'custom'>('month');
 
+  // --- Per-category trend explorer (filters + line chart) ---
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [trendYear, setTrendYear] = useState<number>(CURRENT_YEAR);
+  const [trendType, setTrendType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  const [trendCategoryId, setTrendCategoryId] = useState<string>('');
+  const [trendData, setTrendData] = useState<TrendData | null>(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -67,9 +91,10 @@ export default function ReportsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [transactionsRes, categoriesRes] = await Promise.all([
+      const [transactionsRes, categoriesRes, summaryRes] = await Promise.all([
         authFetch('/api/entries'),
-        authFetch('/api/categories')
+        authFetch('/api/categories'),
+        authFetch('/api/entries/summary')
       ]);
 
       if (transactionsRes.ok) {
@@ -81,12 +106,61 @@ export default function ReportsPage() {
         const categoriesData = await categoriesRes.json();
         setCategories(categoriesData.data || []);
       }
+
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        const years = summaryData?.data?.availableYears;
+        if (Array.isArray(years) && years.length > 0) {
+          setAvailableYears(years);
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Fetch the monthly trend whenever a category (and/or year) is chosen.
+  useEffect(() => {
+    if (!trendCategoryId) {
+      setTrendData(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchTrend = async () => {
+      setTrendLoading(true);
+      try {
+        const res = await authFetch(`/api/entries/trend?categoryId=${trendCategoryId}&year=${trendYear}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (!cancelled && json.success) {
+            setTrendData(json.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching trend:', error);
+      } finally {
+        if (!cancelled) setTrendLoading(false);
+      }
+    };
+
+    fetchTrend();
+    return () => {
+      cancelled = true;
+    };
+  }, [trendCategoryId, trendYear]);
+
+  // Years to offer: from summary data, else fall back to the last 5 years.
+  const trendYearOptions = availableYears.length > 0
+    ? Array.from(new Set([CURRENT_YEAR, ...availableYears])).sort((a, b) => b - a)
+    : Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
+
+  // Categories available for the current type filter.
+  const filteredCategoryOptions = categories.filter(
+    (c) => trendType === 'ALL' || c.type === trendType
+  );
 
   const setPredefinedPeriod = (period: 'month' | 'quarter' | 'year') => {
     const now = new Date();
@@ -211,6 +285,13 @@ export default function ReportsPage() {
     return `₦${value}K`;
   };
 
+  // Compact ₦ label for axes (e.g. ₦12k, ₦1.5m).
+  const formatCurrencyShort = (value: number) => {
+    if (Math.abs(value) >= 1_000_000) return `₦${(value / 1_000_000).toFixed(1)}m`;
+    if (Math.abs(value) >= 1_000) return `₦${Math.round(value / 1_000)}k`;
+    return `₦${value}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
@@ -229,6 +310,105 @@ export default function ReportsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2 text-foreground">📊 Financial Reports</h1>
           <p className="text-muted-foreground">Comprehensive analysis of your financial data</p>
+        </div>
+
+        {/* Category Trend Explorer */}
+        <div className="mb-8 bg-card border border-border rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4 text-foreground">📉 Category Trend</h2>
+
+          {/* Filter row */}
+          <div className="flex flex-wrap gap-4 mb-6">
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">Year</label>
+              <select
+                value={trendYear}
+                onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
+                className="bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-blue-500"
+              >
+                {trendYearOptions.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">Category type</label>
+              <select
+                value={trendType}
+                onChange={(e) => {
+                  setTrendType(e.target.value as 'ALL' | 'INCOME' | 'EXPENSE');
+                  // Reset the category selection when the type changes.
+                  setTrendCategoryId('');
+                }}
+                className="bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-blue-500"
+              >
+                <option value="ALL">All</option>
+                <option value="INCOME">Income</option>
+                <option value="EXPENSE">Expense</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">Category</label>
+              <select
+                value={trendCategoryId}
+                onChange={(e) => setTrendCategoryId(e.target.value)}
+                className="bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select a category</option>
+                {filteredCategoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Chart / empty state */}
+          {!trendCategoryId ? (
+            <div className="h-80 flex items-center justify-center text-center">
+              <div>
+                <span className="text-4xl mb-3 block">🔍</span>
+                <p className="text-muted-foreground">Select a category to see its monthly trend.</p>
+              </div>
+            </div>
+          ) : trendLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">Loading trend...</p>
+            </div>
+          ) : trendData ? (
+            <div>
+              <h3 className="text-lg font-medium mb-4 text-foreground">
+                {trendData.categoryName ?? 'Category'} — {trendData.year}
+              </h3>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData.points}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="label" stroke="#9CA3AF" />
+                    <YAxis stroke="#9CA3AF" tickFormatter={(v: number) => formatCurrencyShort(v)} />
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                      labelStyle={{ color: '#000' }}
+                      contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      name={trendData.categoryName ?? 'Total'}
+                      stroke={trendData.categoryType === 'INCOME' ? '#10b981' : '#ef4444'}
+                      fill={trendData.categoryType === 'INCOME' ? '#10b981' : '#ef4444'}
+                      fillOpacity={0.15}
+                      strokeWidth={3}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">No trend data available.</p>
+            </div>
+          )}
         </div>
 
         {/* Date Range Filter */}

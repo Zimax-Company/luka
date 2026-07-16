@@ -37,11 +37,26 @@ interface RecentTransaction {
   };
 }
 
+interface CategoryComparison {
+  name: string;
+  type: 'INCOME' | 'EXPENSE';
+  current: number;
+  previous: number;
+  changePct: number | null;
+}
+
+interface MonthlyComparison {
+  month: string;
+  previousMonth: string;
+  categories: CategoryComparison[];
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function DashboardContent() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
+  const [comparison, setComparison] = useState<MonthlyComparison | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // The dashboard defaults to the current calendar year; 'all' shows every year.
@@ -54,13 +69,15 @@ export default function DashboardContent() {
         setIsLoading(true);
 
         const yearQuery = `year=${year}`;
-        const [summaryResponse, transactionsResponse] = await Promise.all([
+        const [summaryResponse, transactionsResponse, comparisonResponse] = await Promise.all([
           authFetch(`/api/entries/summary?${yearQuery}`),
-          authFetch(`/api/entries?limit=5&${yearQuery}`)
+          authFetch(`/api/entries?limit=5&${yearQuery}`),
+          authFetch('/api/entries/monthly-comparison')
         ]);
 
         const summaryData = await summaryResponse.json();
         const transactionsData = await transactionsResponse.json();
+        const comparisonData = await comparisonResponse.json();
 
         if (summaryData.success) {
           setSummary(summaryData.data);
@@ -71,6 +88,10 @@ export default function DashboardContent() {
 
         if (transactionsData.success) {
           setRecentTransactions(transactionsData.data.slice(0, 5));
+        }
+
+        if (comparisonData.success) {
+          setComparison(comparisonData.data);
         }
 
       } catch (err) {
@@ -88,6 +109,38 @@ export default function DashboardContent() {
       style: 'currency',
       currency: 'NGN'
     }).format(amount);
+  };
+
+  // Change badge for a category's % change vs the previous month.
+  // null => brand new this month; >0 green up; <0 red down; 0 grey flat.
+  const renderChangeBadge = (changePct: number | null) => {
+    if (changePct === null) {
+      return (
+        <span className="px-2 py-1 rounded text-xs font-medium bg-blue-500/15 text-blue-500">
+          New
+        </span>
+      );
+    }
+    const rounded = Math.round(changePct);
+    if (rounded > 0) {
+      return (
+        <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/15 text-green-500">
+          ▲ {rounded}%
+        </span>
+      );
+    }
+    if (rounded < 0) {
+      return (
+        <span className="px-2 py-1 rounded text-xs font-medium bg-red-500/15 text-red-500">
+          ▼ {Math.abs(rounded)}%
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-1 rounded text-xs font-medium bg-muted-foreground/15 text-muted-foreground">
+        0%
+      </span>
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -185,6 +238,32 @@ export default function DashboardContent() {
             <p className="text-sm text-muted-foreground">
               {Math.round(((summary.totals.net / (summary.totals.income || 1)) * 100))}% savings rate
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Top categories vs last month */}
+      {comparison && comparison.categories.length > 0 && (
+        <div className="mb-8 border border-border rounded-lg bg-card p-6">
+          <h3 className="text-xl font-semibold text-foreground mb-1">Top categories vs last month</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {comparison.month} compared with {comparison.previousMonth}
+          </p>
+          <div className="space-y-2">
+            {comparison.categories.slice(0, 5).map((cat) => (
+              <div key={cat.name} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted">
+                <div className="min-w-0">
+                  <p className="text-foreground text-sm font-medium truncate">{cat.name}</p>
+                  <p className="text-muted-foreground text-xs">{cat.type}</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`font-medium ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
+                    {formatCurrency(Math.abs(cat.current))}
+                  </span>
+                  {renderChangeBadge(cat.changePct)}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
