@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import Navigation from '@/components/Navigation';
 import UserManagementPage from '@/components/UserManagementPage';
 
 export default function UsersPage() {
@@ -17,5 +18,12 @@ export default function UsersPage() {
     );
   }
 
-  return <UserManagementPage currentUser={currentUser} permissions={permissions} />;
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navigation />
+      <main className="bg-background">
+        <UserManagementPage currentUser={currentUser} permissions={permissions} />
+      </main>
+    </div>
+  );
 }

@@ -82,11 +82,27 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [filterType, setFilterType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL')
+  const [page, setPage] = useState(1)
+
+  const PAGE_SIZE = 20
 
   const filteredCategories = categories.filter((category: Category) => {
     if (filterType === 'ALL') return true
     return category.type === filterType
   })
+
+  // Client-side pagination (the categories endpoint returns the full list).
+  const totalPages = Math.max(1, Math.ceil(filteredCategories.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const paginatedCategories = filteredCategories.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  )
+
+  // Reset to the first page when the type filter changes.
+  useEffect(() => {
+    setPage(1)
+  }, [filterType])
 
   const fetchCategories = async () => {
     try {
@@ -271,7 +287,7 @@ export default function CategoriesPage() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {filteredCategories.map((category: Category) => (
+            {paginatedCategories.map((category: Category) => (
               <div
                 key={category.id}
                 className="flex items-center justify-between p-4 border border-border rounded-lg bg-card hover:bg-accent transition-colors"
@@ -306,6 +322,42 @@ export default function CategoriesPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        {filteredCategories.length > PAGE_SIZE && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing{' '}
+              <span className="font-medium text-foreground">
+                {(currentPage - 1) * PAGE_SIZE + 1}
+              </span>
+              –
+              <span className="font-medium text-foreground">
+                {(currentPage - 1) * PAGE_SIZE + paginatedCategories.length}
+              </span>{' '}
+              of <span className="font-medium text-foreground">{filteredCategories.length}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-muted-foreground px-2">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+            </div>
           </div>
         )}
       </div>

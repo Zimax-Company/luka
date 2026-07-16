@@ -242,24 +242,24 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* Top categories vs last month */}
+      {/* Top categories vs last month — rendered as stat cards */}
       {comparison && comparison.categories.length > 0 && (
-        <div className="mb-8 border border-border rounded-lg bg-card p-6">
+        <div className="mb-8">
           <h3 className="text-xl font-semibold text-foreground mb-1">Top categories vs last month</h3>
           <p className="text-sm text-muted-foreground mb-4">
             {comparison.month} compared with {comparison.previousMonth}
           </p>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {comparison.categories.slice(0, 5).map((cat) => (
-              <div key={cat.name} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted">
-                <div className="min-w-0">
-                  <p className="text-foreground text-sm font-medium truncate">{cat.name}</p>
-                  <p className="text-muted-foreground text-xs">{cat.type}</p>
+              <div key={cat.name} className="border border-border rounded-lg bg-card p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">{cat.type === 'INCOME' ? '💰' : '💳'}</span>
+                  <h4 className="text-base font-semibold text-foreground truncate" title={cat.name}>{cat.name}</h4>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`font-medium ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
-                    {formatCurrency(Math.abs(cat.current))}
-                  </span>
+                <p className={`text-2xl font-bold ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
+                  {formatCurrency(Math.abs(cat.current))}
+                </p>
+                <div className="mt-2">
                   {renderChangeBadge(cat.changePct)}
                 </div>
               </div>

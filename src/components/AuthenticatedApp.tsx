@@ -2,7 +2,7 @@
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoginPage from '@/components/LoginPage';
-import NavigationWithAuth from '@/components/NavigationWithAuth';
+import Navigation from '@/components/Navigation';
 import DashboardContent from '@/components/DashboardContent';
 
 function AppContent() {
@@ -25,7 +25,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <NavigationWithAuth currentUser={currentUser} permissions={permissions} />
+      <Navigation currentUser={currentUser} permissions={permissions} />
       <main className="bg-background">
         <DashboardContent />
       </main>

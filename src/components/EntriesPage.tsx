@@ -5,6 +5,9 @@ import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 import { authFetch } from '@/lib/api';
+import { PaginationMeta } from '@/lib/pagination';
+
+const PAGE_SIZE = 20;
 
 interface TransactionsSummary {
   totals: {
@@ -41,6 +44,8 @@ export default function EntriesPage() {
   const [filterYear, setFilterYear] = useState<string>('');
   const [searchInput, setSearchInput] = useState<string>('');
   const [search, setSearch] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -66,12 +71,15 @@ export default function EntriesPage() {
       if (filterMonth) params.append('month', filterMonth);
       if (filterYear) params.append('year', filterYear);
       if (search) params.append('search', search);
+      params.append('page', String(page));
+      params.append('pageSize', String(PAGE_SIZE));
 
       const response = await authFetch(`/api/entries?${params.toString()}`);
       const data = await response.json();
-      
+
       if (data.success) {
         setTransactions(data.data);
+        setPagination(data.pagination ?? null);
       } else {
         setError(data.error);
       }
@@ -123,14 +131,30 @@ export default function EntriesPage() {
     }
   };
 
+  // Reference data (categories/accounts/summary) is independent of filters/page,
+  // so it only needs to load once on mount.
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([fetchTransactions(), fetchCategories(), fetchAccounts(), fetchSummary()]);
+      await Promise.all([fetchCategories(), fetchAccounts(), fetchSummary()]);
       setIsLoading(false);
     };
-    
+
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch the (server-paginated) transaction list whenever a filter or the
+  // current page changes.
+  useEffect(() => {
+    fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCategory, filterType, filterMonth, filterYear, search, page]);
+
+  // Reset to the first page whenever a filter changes so results aren't hidden
+  // on an out-of-range page.
+  useEffect(() => {
+    setPage(1);
   }, [filterCategory, filterType, filterMonth, filterYear, search]);
 
   // Debounce the search input (~300ms) before applying it as a filter.
@@ -602,6 +626,42 @@ export default function EntriesPage() {
           </div>
         )}
       </div>
+
+      {/* Pagination controls */}
+      {pagination && pagination.total > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing{' '}
+            <span className="font-medium text-foreground">
+              {(pagination.page - 1) * pagination.pageSize + 1}
+            </span>
+            –
+            <span className="font-medium text-foreground">
+              {(pagination.page - 1) * pagination.pageSize + transactions.length}
+            </span>{' '}
+            of <span className="font-medium text-foreground">{pagination.total}</span> entries
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={!pagination.hasPrevPage}
+              className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span className="text-sm text-muted-foreground px-2">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!pagination.hasNextPage}
+              className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
