@@ -54,13 +54,22 @@ export default function EntriesPage() {
     note: string;
     categoryId: string;
     amount: string;
+    toHandle: string;
   }>({
     accountId: '',
     date: new Date().toISOString().split('T')[0],
     note: '',
     categoryId: '',
-    amount: ''
+    amount: '',
+    toHandle: ''
   });
+
+  // Transfer recipient live-preview (only used for EXPENSE entries).
+  const [resolvedRecipient, setResolvedRecipient] = useState<
+    { id: string; name: string; handle: string } | null
+  >(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveChecked, setResolveChecked] = useState(false);
 
   // Fetch data
   const fetchTransactions = async () => {
@@ -165,17 +174,93 @@ export default function EntriesPage() {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
+  // The selected category's type decides whether a transfer is possible.
+  const selectedCategory = categories.find((c) => c.id === formData.categoryId);
+  const isExpenseCategory = selectedCategory?.type === 'EXPENSE';
+  // A transfer is only offered for brand-new EXPENSE entries.
+  const canTransfer = !editingTransaction && isExpenseCategory;
+  const handleTrimmed = formData.toHandle.trim().replace(/^@/, '');
+  const isTransfer = canTransfer && handleTrimmed.length > 0;
+  // Block submit while a non-empty handle hasn't resolved to an account.
+  const transferBlocked = isTransfer && (!resolvedRecipient || resolving || !resolveChecked);
+
+  // Live-preview the transfer recipient as the user types a handle.
+  useEffect(() => {
+    if (!canTransfer || handleTrimmed.length === 0) {
+      setResolvedRecipient(null);
+      setResolving(false);
+      setResolveChecked(false);
+      return;
+    }
+
+    let cancelled = false;
+    setResolving(true);
+    setResolveChecked(false);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/accounts/resolve?handle=@${encodeURIComponent(handleTrimmed)}`);
+        const json = await res.json();
+        if (cancelled) return;
+        setResolvedRecipient(json?.success ? json.data : null);
+      } catch {
+        if (!cancelled) setResolvedRecipient(null);
+      } finally {
+        if (!cancelled) {
+          setResolving(false);
+          setResolveChecked(true);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [handleTrimmed, canTransfer]);
+
   // Form handlers
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (transferBlocked) {
+      setError('Enter a valid recipient handle or clear the posting field.');
+      return;
+    }
+
     try {
-      const url = editingTransaction 
+      // Route to the transfer endpoint when a recipient handle is set on a
+      // new expense entry; otherwise create/update a normal entry.
+      if (isTransfer) {
+        const response = await authFetch('/api/transfers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromAccountId: formData.accountId,
+            categoryId: formData.categoryId,
+            amount: parseFloat(formData.amount),
+            date: formData.date,
+            note: formData.note || undefined,
+            toHandle: `@${handleTrimmed}`,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          resetForm();
+          await fetchTransactions();
+          await fetchSummary();
+        } else {
+          setError(data.error || 'Failed to send posting');
+        }
+        return;
+      }
+
+      const url = editingTransaction
         ? `/api/entries/${editingTransaction.id}`
         : '/api/entries';
-      
+
       const method = editingTransaction ? 'PUT' : 'POST';
-      
+
       const response = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -184,9 +269,9 @@ export default function EntriesPage() {
           amount: parseFloat(formData.amount)
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         resetForm();
         await fetchTransactions();
@@ -206,7 +291,8 @@ export default function EntriesPage() {
       date: transaction.date,
       note: transaction.note,
       categoryId: transaction.categoryId,
-      amount: transaction.amount.toString()
+      amount: transaction.amount.toString(),
+      toHandle: ''
     });
     setShowForm(true);
   };
@@ -238,8 +324,12 @@ export default function EntriesPage() {
       date: new Date().toISOString().split('T')[0],
       note: '',
       categoryId: '',
-      amount: ''
+      amount: '',
+      toHandle: ''
     });
+    setResolvedRecipient(null);
+    setResolving(false);
+    setResolveChecked(false);
     setEditingTransaction(null);
     setShowForm(false);
   };
@@ -521,12 +611,54 @@ export default function EntriesPage() {
                 />
               </div>
 
+              {/* Transfer: only offered for new EXPENSE entries */}
+              {canTransfer && (
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
+                    Post to account (@handle)
+                    <span className="ml-1 text-xs text-muted-foreground/70">optional</span>
+                  </label>
+                  <div className="flex items-center bg-input border border-border rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
+                    <span className="text-muted-foreground">@</span>
+                    <input
+                      type="text"
+                      value={formData.toHandle.replace(/^@/, '')}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          toHandle: e.target.value.replace(/^@/, '').toLowerCase(),
+                        }))
+                      }
+                      className="w-full bg-transparent py-2 pl-1 text-foreground focus:outline-none"
+                      placeholder="recipient handle"
+                    />
+                  </div>
+                  {handleTrimmed.length > 0 && (
+                    <p className="mt-1 text-xs">
+                      {resolving ? (
+                        <span className="text-muted-foreground">Checking…</span>
+                      ) : resolvedRecipient ? (
+                        <span className="text-green-400">→ {resolvedRecipient.name.toUpperCase()}</span>
+                      ) : resolveChecked ? (
+                        <span className="text-muted-foreground">No account found for that handle</span>
+                      ) : null}
+                    </p>
+                  )}
+                  {isTransfer && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This will record the expense now and queue a pending posting for the recipient to accept.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  disabled={transferBlocked}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                 >
-                  {editingTransaction ? 'Update' : 'Create'}
+                  {isTransfer ? 'Post to account' : editingTransaction ? 'Update' : 'Create'}
                 </button>
                 <button
                   type="button"

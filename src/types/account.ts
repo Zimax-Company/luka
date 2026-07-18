@@ -3,6 +3,7 @@ export type AccountType = 'PERSONAL' | 'BUSINESS' | 'SAVINGS' | 'CHECKING' | 'CR
 export interface Account {
   id: string;
   userId: string; // Owner of the account
+  handle?: string | null; // Globally-unique @handle for transfers
   name: string;
   description?: string;
   type: AccountType;
@@ -16,6 +17,7 @@ export interface Account {
 export interface CreateAccountRequest {
   userId: string;
   name: string;
+  handle?: string;
   description?: string;
   type: AccountType;
   currency?: string;
@@ -23,6 +25,7 @@ export interface CreateAccountRequest {
 
 export interface UpdateAccountRequest {
   name?: string;
+  handle?: string;
   description?: string;
   type?: AccountType;
   isActive?: boolean;

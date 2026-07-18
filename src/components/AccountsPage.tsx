@@ -28,6 +28,7 @@ export default function AccountsPage() {
   const [newAccount, setNewAccount] = useState<CreateAccountRequest>({
     userId: 'user_admin_001', // Default admin user for now
     name: '',
+    handle: '',
     description: '',
     type: 'PERSONAL',
     currency: 'NGN'
@@ -86,6 +87,7 @@ export default function AccountsPage() {
         setNewAccount({
           userId: 'user_admin_001', // Default admin user for now
           name: '',
+          handle: '',
           description: '',
           type: 'PERSONAL',
           currency: 'NGN'
@@ -171,7 +173,12 @@ export default function AccountsPage() {
                         <span className="text-2xl">{getAccountTypeIcon(account.type)}</span>
                         <div>
                           <h3 className="font-medium text-foreground">{account.name}</h3>
-                          <p className="text-sm text-muted-foreground">{getAccountTypeLabel(account.type)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {getAccountTypeLabel(account.type)}
+                            {account.handle && (
+                              <span className="ml-2 text-blue-400">@{account.handle}</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -209,7 +216,12 @@ export default function AccountsPage() {
                     <div className="flex items-center gap-4">
                       <span className="text-4xl">{getAccountTypeIcon(selectedAccount.type)}</span>
                       <div>
-                        <h2 className="text-2xl font-bold text-foreground">{selectedAccount.name}</h2>
+                        <h2 className="text-2xl font-bold text-foreground">
+                          {selectedAccount.name}
+                          {selectedAccount.handle && (
+                            <span className="ml-2 text-lg font-medium text-blue-400">@{selectedAccount.handle}</span>
+                          )}
+                        </h2>
                         <p className="text-muted-foreground">{selectedAccount.description || 'No description'}</p>
                       </div>
                     </div>
@@ -362,6 +374,30 @@ export default function AccountsPage() {
                   />
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
+                    Handle
+                  </label>
+                  <div className="flex items-center bg-input border border-border rounded-lg px-3 focus-within:border-blue-500">
+                    <span className="text-muted-foreground">@</span>
+                    <input
+                      type="text"
+                      value={newAccount.handle ?? ''}
+                      onChange={(e) =>
+                        setNewAccount({
+                          ...newAccount,
+                          handle: e.target.value.replace(/^@/, '').toLowerCase(),
+                        })
+                      }
+                      placeholder="auto-generated from name if left blank"
+                      className="w-full bg-transparent py-2 pl-1 text-foreground focus:outline-none"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A globally-unique handle used for transfers. De-duplicated on save.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-muted-foreground mb-1">
                     Description

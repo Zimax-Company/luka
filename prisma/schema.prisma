@@ -103,6 +103,7 @@ model Account {
   id          String      @id @default(cuid())
   userId      String      @map("user_id") // Owner of the account (admin user)
   customerId  String?     @map("customer_id") // Billable account this account belongs to (denormalised from owner)
+  handle      String?     @unique @db.VarChar(64) // Globally-unique @handle for transfers (e.g. anyirah)
   name        String      @db.VarChar(255)
   description String?     @db.Text
   type        AccountType @default(PERSONAL)
@@ -206,6 +207,35 @@ model Entry {
   @@index([amount], name: "idx_amount")
   @@index([createdAt], name: "idx_created_at")
   @@map("entries")
+}
+
+// A handle-addressed transfer between two accounts. The sender's EXPENSE entry
+// is created immediately; the recipient's INCOME entry is created only when they
+// accept. On reject the sender's expense is reversed. Loosely linked (no FKs) so
+// it survives entry/account deletion. Accounts may be in different customers.
+model Transfer {
+  id              String    @id @default(cuid())
+  fromAccountId   String    @map("from_account_id")
+  toAccountId     String    @map("to_account_id")
+  fromEntryId     String?   @map("from_entry_id") // sender's expense entry (reversed on reject)
+  toEntryId       String?   @map("to_entry_id") // recipient's income entry (created on accept)
+  amount          Decimal   @db.Decimal(10, 2)
+  note            String?   @db.Text
+  date            DateTime  @db.Date
+  status          String    @default("PENDING") @db.VarChar(20) // PENDING | ACCEPTED | REJECTED
+  senderId        String?   @map("sender_id")
+  senderName      String    @map("sender_name") @db.VarChar(255)
+  fromAccountName String?   @map("from_account_name") @db.VarChar(255)
+  toHandle        String?   @map("to_handle") @db.VarChar(64)
+  decidedById     String?   @map("decided_by_id")
+  decidedByName   String?   @map("decided_by_name") @db.VarChar(255)
+  decidedAt       DateTime? @map("decided_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([toAccountId, status], name: "idx_transfer_to_status")
+  @@index([fromAccountId], name: "idx_transfer_from")
+  @@index([createdAt], name: "idx_transfer_created")
+  @@map("transfers")
 }
 
 enum AccountType {

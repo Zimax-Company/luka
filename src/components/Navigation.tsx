@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { User, UserPermissions } from '@/types/user'
 import { useAuth } from '@/contexts/AuthContext'
 import NotificationBell from '@/components/NotificationBell'
+import { authFetch } from '@/lib/api'
 
 interface NavigationProps {
   currentUser?: User;
@@ -18,12 +19,15 @@ interface NavItem {
   icon: string;
   permission: keyof UserPermissions | null;
   adminOnly?: boolean;
+  ownerOnly?: boolean;
 }
 
 export default function Navigation({ currentUser: currentUserProp, permissions: permissionsProp }: NavigationProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [incomingCount, setIncomingCount] = useState(0)
+  const [isRoot, setIsRoot] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement>(null)
   const { logout, currentUser: authUser, permissions: authPermissions } = useAuth()
 
@@ -43,7 +47,8 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
 
   const moreNavigation: NavItem[] = [
     { name: 'Accounts', href: '/accounts', icon: '🏦', permission: 'canEditAccounts' },
-    { name: 'Subscription', href: '/subscription', icon: '💳', permission: null },
+    { name: 'Postings', href: '/transfers', icon: '🔄', permission: null },
+    { name: 'Subscription', href: '/subscription', icon: '💳', permission: null, ownerOnly: true },
     { name: 'Reports', href: '/reports', icon: '📊', permission: 'canViewReports' },
     { name: 'Users', href: '/users', icon: '👥', permission: 'canManageUsers' },
     { name: 'Settings', href: '/settings', icon: '⚙️', permission: null },
@@ -53,6 +58,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
   // Filter navigation based on permissions / role.
   const canShow = (item: NavItem) => {
     if (item.adminOnly && role !== 'ADMIN') return false;
+    if (item.ownerOnly && !isRoot) return false;
     if (!item.permission) return true;
     if (!permissions) return true;
     return !!permissions[item.permission];
@@ -70,6 +76,47 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
     setMobileMenuOpen(false)
     setMoreMenuOpen(false)
   }, [pathname])
+
+  // Surface a pending-incoming transfer count on the Transfers nav link.
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await authFetch('/api/transfers?box=incoming')
+        const json = await res.json()
+        if (!cancelled && json?.success && Array.isArray(json.data)) {
+          setIncomingCount(json.data.length)
+        }
+      } catch {
+        // Non-critical; leave the badge hidden on failure.
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+    // Refresh when navigating (e.g. after accepting/rejecting on the Postings page).
+  }, [currentUser, pathname])
+
+  // Only the customer owner (root user) may see the Subscription link/page.
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await authFetch('/api/subscription')
+        const json = await res.json()
+        if (!cancelled) setIsRoot(!!(json?.data?.isRoot ?? json?.isRoot))
+      } catch {
+        if (!cancelled) setIsRoot(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser])
 
   // Close the "More" dropdown when clicking outside it.
   useEffect(() => {
@@ -136,6 +183,11 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                           >
                             <span className="mr-2">{item.icon}</span>
                             {item.name}
+                            {item.href === '/transfers' && incomingCount > 0 && (
+                              <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold">
+                                {incomingCount}
+                              </span>
+                            )}
                           </Link>
                         ))}
                       </div>
@@ -197,7 +249,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                   key={item.name}
                   href={item.href}
                   onClick={closeMobileMenu}
-                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                  className={`flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors ${
                     pathname === item.href
                       ? 'bg-muted text-foreground'
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -205,6 +257,11 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                 >
                   <span className="mr-2">{item.icon}</span>
                   {item.name}
+                  {item.href === '/transfers' && incomingCount > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold">
+                      {incomingCount}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

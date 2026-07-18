@@ -1,5 +1,6 @@
 import { Account, AccountWithStats, CreateAccountRequest, UpdateAccountRequest, AccountType } from '@/types/account';
 import { createPrismaClient } from '@/lib/prismaClient';
+import { uniqueHandle } from '@/lib/handle';
 
 const prisma = createPrismaClient();
 
@@ -48,7 +49,8 @@ export class PrismaAccountService {
         id: account.id,
         name: account.name,
         description: account.description || undefined,
-  userId: account.userId,
+        handle: account.handle,
+        userId: account.userId,
         type: account.type as AccountType,
         currency: account.currency,
         currentBalance: currentBalance,
@@ -82,7 +84,8 @@ export class PrismaAccountService {
         id: account.id,
         name: account.name,
         description: account.description || undefined,
-  userId: account.userId,
+        handle: account.handle,
+        userId: account.userId,
         type: account.type as AccountType,
         currency: account.currency,
         currentBalance: currentBalance,
@@ -146,11 +149,13 @@ export class PrismaAccountService {
       where: { id: data.userId },
       select: { customerId: true },
     });
+    const handle = await uniqueHandle(data.handle || data.name);
 
     const newAccount = await prisma.account.create({
       data: {
         userId: data.userId,
         customerId: owner?.customerId ?? null,
+        handle,
         name: data.name,
         description: data.description,
         type: data.type,
@@ -158,14 +163,15 @@ export class PrismaAccountService {
         isActive: true
       }
     });
-    
+
     console.log(`✅ Database created account with id=${newAccount.id}`);
-    
+
     return {
       id: newAccount.id,
       name: newAccount.name,
       description: newAccount.description || undefined,
-  userId: newAccount.userId,
+      handle: newAccount.handle,
+      userId: newAccount.userId,
       type: newAccount.type as AccountType,
       currency: newAccount.currency,
       currentBalance: 0, // New account starts with 0 balance
@@ -181,21 +187,28 @@ export class PrismaAccountService {
     this.logDatabaseOperation('UPDATE accounts SET updated_at = NOW() WHERE id = ?', `id=${id}, fields=[${updateFields}]`);
     
     try {
+      // Re-slug + de-dupe an explicitly changed handle.
+      const updateData: UpdateAccountRequest & { handle?: string } = { ...data };
+      if (data.handle !== undefined) {
+        updateData.handle = await uniqueHandle(data.handle, id);
+      }
+
       const updatedAccount = await prisma.account.update({
         where: { id },
-        data
+        data: updateData
       });
-      
+
       console.log(`✅ Database updated account: ${updatedAccount.name} (${updatedAccount.type})`);
-      
+
       // Calculate current balance in real-time
       const currentBalance = await this.calculateBalance(id);
-      
+
       return {
         id: updatedAccount.id,
         name: updatedAccount.name,
         description: updatedAccount.description || undefined,
-  userId: updatedAccount.userId,
+        handle: updatedAccount.handle,
+        userId: updatedAccount.userId,
         type: updatedAccount.type as AccountType,
         currency: updatedAccount.currency,
         currentBalance: currentBalance,
@@ -246,7 +259,8 @@ export class PrismaAccountService {
         id: account.id,
         name: account.name,
         description: account.description || undefined,
-  userId: account.userId,
+        handle: account.handle,
+        userId: account.userId,
         type: account.type as AccountType,
         currency: account.currency,
         currentBalance: currentBalance,
