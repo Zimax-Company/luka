@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
+import { getActor } from '@/lib/actor';
+import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
 // GET /api/entries/monthly-comparison?type=INCOME|EXPENSE
 // Top 5 categories by current-month total, each with its previous-month total
@@ -16,7 +18,8 @@ export async function GET(request: NextRequest) {
     const prevY = prev.getFullYear();
     const prevM = prev.getMonth();
 
-    const all = await PrismaEntryService.getAll();
+    const accessibleIds = await getAccessibleAccountIds(await getActor(request));
+    const all = scopeByAccount(await PrismaEntryService.getAll(), accessibleIds);
 
     // Aggregate per category name for current and previous month.
     const agg = new Map<string, { name: string; type: string; current: number; previous: number }>();

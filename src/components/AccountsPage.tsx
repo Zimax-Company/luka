@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Account, AccountWithStats, AccountType, CreateAccountRequest } from '@/types/account';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import AccountMembersModal from '@/components/AccountMembersModal';
 
 const ACCOUNT_TYPES = [
   { value: 'PERSONAL' as AccountType, label: '👤 Personal', description: 'Personal finances and expenses' },
@@ -19,6 +21,9 @@ export default function AccountsPage() {
   const [creating, setCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [showMembers, setShowMembers] = useState(false);
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'ADMIN';
   
   const [newAccount, setNewAccount] = useState<CreateAccountRequest>({
     userId: 'user_admin_001', // Default admin user for now
@@ -209,13 +214,23 @@ export default function AccountsPage() {
                       </div>
                     </div>
                     
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Current Balance</p>
-                      <p className={`text-3xl font-bold ${
-                        selectedAccount.currentBalance >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {formatCurrency(selectedAccount.currentBalance)}
-                      </p>
+                    <div className="text-right flex flex-col items-end gap-2">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Current Balance</p>
+                        <p className={`text-3xl font-bold ${
+                          selectedAccount.currentBalance >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {formatCurrency(selectedAccount.currentBalance)}
+                        </p>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => setShowMembers(true)}
+                          className="bg-muted hover:bg-accent border border-border text-foreground px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+                        >
+                          👥 Members
+                        </button>
+                      )}
                     </div>
                   </div>
                   
@@ -317,6 +332,15 @@ export default function AccountsPage() {
             )}
           </div>
         </div>
+
+        {/* Members Modal */}
+        {showMembers && selectedAccount && (
+          <AccountMembersModal
+            accountId={selectedAccount.id}
+            accountName={selectedAccount.name}
+            onClose={() => setShowMembers(false)}
+          />
+        )}
 
         {/* Create Account Modal */}
         {showCreateForm && (

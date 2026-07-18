@@ -33,6 +33,8 @@ model User {
 
   // User can own accounts (only admins can create accounts)
   accounts Account[]
+  // Per-account access grants (which accounts a non-admin user can see/act on)
+  accountAccess AccountAccess[]
 
   @@index([email], name: "idx_users_email")
   @@index([role], name: "idx_users_role")
@@ -100,6 +102,7 @@ model AuditLog {
 model Account {
   id          String      @id @default(cuid())
   userId      String      @map("user_id") // Owner of the account (admin user)
+  customerId  String?     @map("customer_id") // Billable account this account belongs to (denormalised from owner)
   name        String      @db.VarChar(255)
   description String?     @db.Text
   type        AccountType @default(PERSONAL)
@@ -107,17 +110,60 @@ model Account {
   isActive    Boolean     @default(true) @map("is_active")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
-  
+
   // Relationships
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   categories   Category[]
   entries      Entry[]
+  access       AccountAccess[]
 
   @@index([userId], name: "idx_accounts_user_id")
+  @@index([customerId], name: "idx_accounts_customer_id")
   @@index([type], name: "idx_accounts_type")
   @@index([isActive], name: "idx_accounts_active")
   @@index([createdAt], name: "idx_accounts_created_at")
   @@map("accounts")
+}
+
+// Grants a (non-admin) user access to a specific account. Admins implicitly have
+// access to every account in their customer, so they get no rows here. The user's
+// global role (EDITOR/VIEWER) still decides capability; this decides scope.
+model AccountAccess {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  accountId String   @map("account_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountId], name: "unique_user_account")
+  @@index([userId], name: "idx_access_user")
+  @@index([accountId], name: "idx_access_account")
+  @@map("account_access")
+}
+
+// In-app notification. One row per recipient so read state is per-user. Not
+// FK-linked (like AuditLog) so it survives deletion of the referenced entry/user.
+model Notification {
+  id          String    @id @default(cuid())
+  customerId  String?   @map("customer_id")
+  recipientId String    @map("recipient_id") // user who should see it
+  actorId     String?   @map("actor_id")
+  actorName   String    @map("actor_name") @db.VarChar(255)
+  action      String    @db.VarChar(20) // CREATE | UPDATE | DELETE
+  resource    String    @db.VarChar(50) // entry
+  resourceId  String?   @map("resource_id")
+  accountId   String?   @map("account_id")
+  accountName String?   @map("account_name") @db.VarChar(255)
+  summary     String?   @db.Text
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([recipientId, readAt], name: "idx_notif_recipient")
+  @@index([customerId], name: "idx_notif_customer")
+  @@index([createdAt], name: "idx_notif_created")
+  @@map("notifications")
 }
 
 model Category {

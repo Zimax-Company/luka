@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
+import { getActor } from '@/lib/actor';
+import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
 // GET /api/reports/summary - Get financial summary data for reports
 export async function GET(request: NextRequest) {
@@ -10,9 +12,10 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     
-    // Get all transactions
-    const allTransactions = await PrismaEntryService.getAll();
-    console.log(`✅ Found ${allTransactions.length} total transactions`);
+    // Get all transactions, scoped to the accounts the actor can access.
+    const accessibleIds = await getAccessibleAccountIds(await getActor(request));
+    const allTransactions = scopeByAccount(await PrismaEntryService.getAll(), accessibleIds);
+    console.log(`✅ Found ${allTransactions.length} accessible transactions`);
     
     // Filter by date range if provided
     let filteredTransactions = allTransactions;

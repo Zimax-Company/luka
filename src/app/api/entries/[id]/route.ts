@@ -3,6 +3,8 @@ import { PrismaEntryService } from '@/services/prismaEntryService';
 import { UpdateEntryRequest } from '@/types/entry';
 import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
+import { canAccessAccount } from '@/lib/access';
+import { notifyEntryChange } from '@/lib/notify';
 
 // GET /api/entries/[id] - Get entry by ID
 export async function GET(
@@ -17,13 +19,17 @@ export async function GET(
 
     if (!transaction) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Transaction not found',
           message: `Transaction with id ${id} does not exist`
         },
         { status: 404 }
       );
+    }
+
+    if (!(await canAccessAccount(await getActor(request), transaction.accountId))) {
+      return NextResponse.json({ success: false, error: 'No access to this entry' }, { status: 403 });
     }
 
     return NextResponse.json({
@@ -56,12 +62,25 @@ export async function PUT(
     
     const body: UpdateEntryRequest = await request.json();
 
+    // Access control: viewers can't write; user must have access to the entry's account.
+    const actor = await getActor(request);
+    const existing = await PrismaEntryService.getById(id);
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    }
+    if (!actor || actor.role === 'VIEWER') {
+      return NextResponse.json({ success: false, error: 'Not permitted to edit entries' }, { status: 403 });
+    }
+    if (!(await canAccessAccount(actor, existing.accountId))) {
+      return NextResponse.json({ success: false, error: 'No access to this entry' }, { status: 403 });
+    }
+
     const transaction = await PrismaEntryService.update(id, body);
 
     if (!transaction) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Transaction not found',
           message: `Transaction with id ${id} does not exist`
         },
@@ -70,12 +89,13 @@ export async function PUT(
     }
 
     recordAudit(
-      await getActor(request),
+      actor,
       'UPDATE',
       'entry',
       id,
       `Updated entry ${Number(transaction.amount)} · ${transaction.category?.name ?? ''}`,
     );
+    void notifyEntryChange(actor, 'UPDATE', transaction as any);
 
     return NextResponse.json({
       success: true,
@@ -117,10 +137,24 @@ export async function DELETE(
   try {
     const { id } = await params;
     console.log(`Deleting transaction with ID: ${id}`);
-    
+
+    // Access control: fetch first so we can check access and notify with details.
+    const actor = await getActor(request);
+    const existing = await PrismaEntryService.getById(id);
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    }
+    if (!actor || actor.role === 'VIEWER') {
+      return NextResponse.json({ success: false, error: 'Not permitted to delete entries' }, { status: 403 });
+    }
+    if (!(await canAccessAccount(actor, existing.accountId))) {
+      return NextResponse.json({ success: false, error: 'No access to this entry' }, { status: 403 });
+    }
+
     await PrismaEntryService.delete(id);
 
-    recordAudit(await getActor(request), 'DELETE', 'entry', id, `Deleted entry ${id}`);
+    recordAudit(actor, 'DELETE', 'entry', id, `Deleted entry ${id}`);
+    void notifyEntryChange(actor, 'DELETE', existing as any);
 
     return NextResponse.json({
       success: true,

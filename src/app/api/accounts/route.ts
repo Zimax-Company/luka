@@ -3,15 +3,17 @@ import { PrismaAccountService } from '@/services/prismaAccountService';
 import { CreateAccountRequest } from '@/types/account';
 import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
+import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
-// GET /api/accounts - Get all accounts
-export async function GET() {
+// GET /api/accounts - Get accounts the acting user can access
+export async function GET(request: NextRequest) {
   try {
-    console.log('🏦 Getting all accounts...');
-    const accounts = await PrismaAccountService.getAll();
-    
-    return NextResponse.json({ 
-      success: true, 
+    console.log('🏦 Getting accessible accounts...');
+    const accessibleIds = await getAccessibleAccountIds(await getActor(request));
+    const accounts = scopeByAccount(await PrismaAccountService.getAll(), accessibleIds, 'id');
+
+    return NextResponse.json({
+      success: true,
       data: accounts,
       message: `Retrieved ${accounts.length} accounts`,
       source: 'database'

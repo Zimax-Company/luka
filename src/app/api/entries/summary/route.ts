@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
+import { getActor } from '@/lib/actor';
+import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
 // GET /api/entries/summary - Get entry summary/statistics.
 // Supports ?year=YYYY to scope the summary to a single calendar year, or
@@ -10,7 +12,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get('year');
 
-    const all = await PrismaEntryService.getAll();
+    const accessibleIds = await getAccessibleAccountIds(await getActor(request));
+    const all = scopeByAccount(await PrismaEntryService.getAll(), accessibleIds);
 
     // Distinct years present in the data, newest first.
     const availableYears = Array.from(

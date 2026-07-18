@@ -140,9 +140,17 @@ export class PrismaAccountService {
     this.logDatabaseOperation('INSERT INTO accounts (name, type, currency) VALUES (?, ?, ?)', 
       `${data.name} (${data.type}) - ${data.currency}`);
     
+    // Denormalise the owner's customer onto the account so access scoping and
+    // notifications can resolve the tenant without an extra join.
+    const owner = await prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { customerId: true },
+    });
+
     const newAccount = await prisma.account.create({
       data: {
-  userId: data.userId,
+        userId: data.userId,
+        customerId: owner?.customerId ?? null,
         name: data.name,
         description: data.description,
         type: data.type,

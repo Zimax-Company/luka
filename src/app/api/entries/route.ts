@@ -4,6 +4,8 @@ import { CreateEntryRequest } from '@/types/entry';
 import { parsePagination, paginateArray } from '@/lib/pagination';
 import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
+import { getAccessibleAccountIds, scopeByAccount, canAccessAccount } from '@/lib/access';
+import { notifyEntryChange } from '@/lib/notify';
 
 // Always use database service (we have MySQL running)
 function getEntryService() {
@@ -36,6 +38,11 @@ export async function GET(request: NextRequest) {
     } else {
       transactions = await service.getAll();
     }
+
+    // Scope to the accounts the acting user can access (dashboard, lists, etc.).
+    const actor = await getActor(request);
+    const accessibleIds = await getAccessibleAccountIds(actor);
+    transactions = scopeByAccount(transactions, accessibleIds);
 
     // Apply type filter if specified
     if (type && (type === 'INCOME' || type === 'EXPENSE')) {
@@ -141,9 +148,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Access control: viewers can't write; user must have access to the account.
+    const actor = await getActor(request);
+    if (!actor || actor.role === 'VIEWER') {
+      return NextResponse.json({ success: false, error: 'Not permitted to create entries' }, { status: 403 });
+    }
+    if (!(await canAccessAccount(actor, body.accountId))) {
+      return NextResponse.json({ success: false, error: 'No access to this account' }, { status: 403 });
+    }
+
     const transaction = await service.create(body);
 
-    const actor = await getActor(request);
     const kind = transaction.category?.type === 'INCOME' ? 'income' : 'expense';
     recordAudit(
       actor,
@@ -152,6 +167,8 @@ export async function POST(request: NextRequest) {
       transaction.id,
       `Added ${kind} ${Number(transaction.amount)} · ${transaction.category?.name ?? ''}`,
     );
+    // Notify other users with access to this account.
+    void notifyEntryChange(actor, 'CREATE', transaction as any);
 
     return NextResponse.json({
       success: true,

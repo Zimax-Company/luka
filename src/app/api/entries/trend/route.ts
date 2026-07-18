@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
+import { getActor } from '@/lib/actor';
+import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -16,7 +18,8 @@ export async function GET(request: NextRequest) {
     }
     const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
 
-    const all = await PrismaEntryService.getByCategory(categoryId);
+    const accessibleIds = await getAccessibleAccountIds(await getActor(request));
+    const all = scopeByAccount(await PrismaEntryService.getByCategory(categoryId), accessibleIds);
     const inYear = all.filter(e => new Date(e.date).getFullYear() === year);
 
     const points = MONTHS.map((label, i) => ({ month: i + 1, label, total: 0, count: 0 }));

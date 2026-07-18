@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { User, UserPermissions } from '@/types/user'
 import { useAuth } from '@/contexts/AuthContext'
+import NotificationBell from '@/components/NotificationBell'
 
 interface NavigationProps {
   currentUser?: User;
@@ -149,6 +150,9 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
           {currentUser && (
             <div className="hidden md:block">
               <div className="ml-4 flex items-center md:ml-6">
+                <div className="mr-4">
+                  <NotificationBell />
+                </div>
                 <div className="text-muted-foreground mr-4">
                   <div className="text-sm">👋 {currentUser.name}</div>
                   <div className="text-xs text-muted-foreground">{currentUser.role}</div>
@@ -164,7 +168,8 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
           )}
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center gap-1">
+            {currentUser && <NotificationBell />}
             <button
               onClick={toggleMobileMenu}
               className="text-muted-foreground hover:text-foreground p-2"
