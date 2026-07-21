@@ -38,6 +38,7 @@ interface RecentTransaction {
 }
 
 interface CategoryComparison {
+  categoryId?: string;
   name: string;
   type: 'INCOME' | 'EXPENSE';
   current: number;
@@ -46,9 +47,15 @@ interface CategoryComparison {
 }
 
 interface MonthlyComparison {
+  accountId?: string;
   month: string;
   previousMonth: string;
   categories: CategoryComparison[];
+}
+
+interface DashboardAccount {
+  id: string;
+  name: string;
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -57,6 +64,9 @@ export default function DashboardContent() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [comparison, setComparison] = useState<MonthlyComparison | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [accounts, setAccounts] = useState<DashboardAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // The dashboard defaults to the current calendar year; 'all' shows every year.
@@ -69,15 +79,13 @@ export default function DashboardContent() {
         setIsLoading(true);
 
         const yearQuery = `year=${year}`;
-        const [summaryResponse, transactionsResponse, comparisonResponse] = await Promise.all([
+        const [summaryResponse, transactionsResponse] = await Promise.all([
           authFetch(`/api/entries/summary?${yearQuery}`),
-          authFetch(`/api/entries?limit=5&${yearQuery}`),
-          authFetch('/api/entries/monthly-comparison')
+          authFetch(`/api/entries?limit=5&${yearQuery}`)
         ]);
 
         const summaryData = await summaryResponse.json();
         const transactionsData = await transactionsResponse.json();
-        const comparisonData = await comparisonResponse.json();
 
         if (summaryData.success) {
           setSummary(summaryData.data);
@@ -90,10 +98,6 @@ export default function DashboardContent() {
           setRecentTransactions(transactionsData.data.slice(0, 5));
         }
 
-        if (comparisonData.success) {
-          setComparison(comparisonData.data);
-        }
-
       } catch (err) {
         setError('Failed to fetch dashboard data');
       } finally {
@@ -103,6 +107,58 @@ export default function DashboardContent() {
 
     fetchData();
   }, [year]);
+
+  // Accounts are access-scoped by the API; load once and default to the first.
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const res = await authFetch('/api/accounts');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          setAccounts(data.data);
+          if (data.data.length > 0) {
+            setSelectedAccountId((prev) => prev || data.data[0].id);
+          }
+        }
+      } catch {
+        // Non-critical: the comparison card simply stays empty without accounts.
+      }
+    };
+
+    fetchAccounts();
+  }, []);
+
+  // The "Top categories vs last month" card is account-scoped and enforced
+  // server-side; re-fetch whenever the chosen account changes.
+  useEffect(() => {
+    if (!selectedAccountId) {
+      setComparison(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchComparison = async () => {
+      try {
+        setComparisonLoading(true);
+        const res = await authFetch(
+          `/api/entries/monthly-comparison?accountId=${encodeURIComponent(selectedAccountId)}`
+        );
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          setComparison(data.data);
+        }
+      } catch {
+        if (!cancelled) setComparison(null);
+      } finally {
+        if (!cancelled) setComparisonLoading(false);
+      }
+    };
+
+    fetchComparison();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccountId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -242,29 +298,59 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* Top categories vs last month — rendered as stat cards */}
-      {comparison && comparison.categories.length > 0 && (
+      {/* Top categories vs last month — account-scoped, rendered as stat cards */}
+      {accounts.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-xl font-semibold text-foreground mb-1">Top categories vs last month</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {comparison.month} compared with {comparison.previousMonth}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {comparison.categories.slice(0, 5).map((cat) => (
-              <div key={cat.name} className="border border-border rounded-lg bg-card p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl">{cat.type === 'INCOME' ? '💰' : '💳'}</span>
-                  <h4 className="text-base font-semibold text-foreground truncate" title={cat.name}>{cat.name}</h4>
-                </div>
-                <p className={`text-2xl font-bold ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
-                  {formatCurrency(Math.abs(cat.current))}
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-1">Top categories vs last month</h3>
+              {comparison && (
+                <p className="text-sm text-muted-foreground">
+                  {comparison.month} compared with {comparison.previousMonth}
                 </p>
-                <div className="mt-2">
-                  {renderChangeBadge(cat.changePct)}
-                </div>
-              </div>
-            ))}
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="comparison-account" className="text-sm text-muted-foreground">Account</label>
+              <select
+                id="comparison-account"
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none"
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {comparisonLoading ? (
+            <div className="border border-border rounded-lg bg-card p-6 text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : comparison && comparison.categories.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {comparison.categories.slice(0, 5).map((cat) => (
+                <div key={cat.categoryId ?? cat.name} className="border border-border rounded-lg bg-card p-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">{cat.type === 'INCOME' ? '💰' : '💳'}</span>
+                    <h4 className="text-base font-semibold text-foreground truncate" title={cat.name}>{cat.name}</h4>
+                  </div>
+                  <p className={`text-2xl font-bold ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
+                    {formatCurrency(Math.abs(cat.current))}
+                  </p>
+                  <div className="mt-2">
+                    {renderChangeBadge(cat.changePct)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="border border-border rounded-lg bg-card p-6 text-sm text-muted-foreground">
+              No activity this month for this account.
+            </div>
+          )}
         </div>
       )}
 
