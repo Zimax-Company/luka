@@ -27,6 +27,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [incomingCount, setIncomingCount] = useState(0)
+  const [pendingCount, setPendingCount] = useState(0)
   const [isRoot, setIsRoot] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement>(null)
   const { logout, currentUser: authUser, permissions: authPermissions } = useAuth()
@@ -42,12 +43,14 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
   const primaryNavigation: NavItem[] = [
     { name: 'Dashboard', href: '/', icon: '🏠', permission: null },
     { name: 'Entries', href: '/entries', icon: '💰', permission: 'canCreateTransactions' },
+    { name: 'Inbox', href: '/inbox', icon: '📥', permission: null },
     { name: 'Categories', href: '/categories', icon: '📁', permission: null },
   ];
 
   const moreNavigation: NavItem[] = [
     { name: 'Accounts', href: '/accounts', icon: '🏦', permission: 'canEditAccounts' },
     { name: 'Postings', href: '/transfers', icon: '🔄', permission: null },
+    { name: 'Schedules', href: '/schedules', icon: '🔁', permission: null },
     { name: 'Subscription', href: '/subscription', icon: '💳', permission: null, ownerOnly: true },
     { name: 'Reports', href: '/reports', icon: '📊', permission: 'canViewReports' },
     { name: 'Users', href: '/users', icon: '👥', permission: 'canManageUsers' },
@@ -99,6 +102,30 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
     // Refresh when navigating (e.g. after accepting/rejecting on the Postings page).
   }, [currentUser, pathname])
 
+  // Surface the pending review-inbox count on the Inbox nav link (polled, like
+  // the notification badge).
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await authFetch('/api/drafts/count')
+        const json = await res.json()
+        if (!cancelled && json?.success && typeof json.count === 'number') {
+          setPendingCount(json.count)
+        }
+      } catch {
+        // Non-critical; leave the badge hidden on failure.
+      }
+    }
+    load()
+    const interval = setInterval(load, 30000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [currentUser, pathname])
+
   // Only the customer owner (root user) may see the Subscription link/page.
   useEffect(() => {
     if (!currentUser) return
@@ -135,6 +162,19 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
       active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
     }`
 
+  // Red pending-count badge shared by the Inbox and Postings nav links.
+  const badgeFor = (href: string, className = 'ml-2') => {
+    const count = href === '/inbox' ? pendingCount : href === '/transfers' ? incomingCount : 0
+    if (count <= 0) return null
+    return (
+      <span
+        className={`${className} inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold`}
+      >
+        {count}
+      </span>
+    )
+  }
+
   return (
     <nav className="bg-card border-b border-border sticky top-0 z-40">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -151,6 +191,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                   <Link key={item.name} href={item.href} className={linkClass(pathname === item.href)}>
                     <span className="mr-2">{item.icon}</span>
                     {item.name}
+                    {badgeFor(item.href)}
                   </Link>
                 ))}
 
@@ -183,11 +224,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                           >
                             <span className="mr-2">{item.icon}</span>
                             {item.name}
-                            {item.href === '/transfers' && incomingCount > 0 && (
-                              <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold">
-                                {incomingCount}
-                              </span>
-                            )}
+                            {badgeFor(item.href, 'ml-auto')}
                           </Link>
                         ))}
                       </div>
@@ -257,11 +294,7 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                 >
                   <span className="mr-2">{item.icon}</span>
                   {item.name}
-                  {item.href === '/transfers' && incomingCount > 0 && (
-                    <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold">
-                      {incomingCount}
-                    </span>
-                  )}
+                  {badgeFor(item.href, 'ml-auto')}
                 </Link>
               ))}
             </div>

@@ -5,6 +5,7 @@ import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
 import { canAccessAccount } from '@/lib/access';
 import { notifyEntryChange } from '@/lib/notify';
+import { invalidateCategoryModel } from '@/lib/categorizeStore';
 
 // GET /api/entries/[id] - Get entry by ID
 export async function GET(
@@ -96,6 +97,7 @@ export async function PUT(
       `Updated entry ${Number(transaction.amount)} · ${transaction.category?.name ?? ''}`,
     );
     void notifyEntryChange(actor, 'UPDATE', transaction as any);
+    invalidateCategoryModel(existing.accountId);
 
     return NextResponse.json({
       success: true,
@@ -155,6 +157,7 @@ export async function DELETE(
 
     recordAudit(actor, 'DELETE', 'entry', id, `Deleted entry ${id}`);
     void notifyEntryChange(actor, 'DELETE', existing as any);
+    invalidateCategoryModel(existing.accountId);
 
     return NextResponse.json({
       success: true,

@@ -238,6 +238,59 @@ model Transfer {
   @@map("transfers")
 }
 
+// A scheduled entry. The cron job drafts it on nextRunOn (into the inbox, or
+// posts it directly when autoPost). Loosely linked (no FKs) like the other
+// recent models. amount null => "ask me" (a placeholder draft to fill in).
+model RecurringTemplate {
+  id          String    @id @default(cuid())
+  customerId  String?   @map("customer_id")
+  accountId   String    @map("account_id")
+  categoryId  String    @map("category_id")
+  type        CategoryType
+  amount      Decimal?  @db.Decimal(10, 2)
+  note        String?   @db.Text
+  cadence     String    @db.VarChar(20) // DAILY | WEEKLY | MONTHLY | YEARLY
+  dayOfMonth  Int?      @map("day_of_month") // 1..31 (clamped to month length)
+  dayOfWeek   Int?      @map("day_of_week") // 0..6 (Sun..Sat)
+  autoPost    Boolean   @default(false) @map("auto_post")
+  active      Boolean   @default(true)
+  nextRunOn   DateTime  @map("next_run_on") @db.Date
+  lastRunOn   DateTime? @map("last_run_on") @db.Date
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([active, nextRunOn], name: "idx_recurring_due")
+  @@index([accountId], name: "idx_recurring_account")
+  @@index([customerId], name: "idx_recurring_customer")
+  @@map("recurring_templates")
+}
+
+// A pending entry awaiting review in the inbox. Approving it creates a real
+// Entry; dismissing drops it. Fed by recurring (now) and SMS/OCR/import (later).
+model DraftEntry {
+  id            String   @id @default(cuid())
+  customerId    String?  @map("customer_id")
+  accountId     String   @map("account_id")
+  categoryId    String?  @map("category_id") // suggested category (may be null)
+  suggestedConf Float?   @map("suggested_conf") // 0..1 classifier confidence
+  type          CategoryType
+  amount        Decimal? @db.Decimal(10, 2)
+  note          String?  @db.Text
+  date          DateTime @db.Date
+  source        String   @db.VarChar(20) // RECURRING | SMS | OCR | IMPORT | MANUAL
+  status        String   @default("PENDING") @db.VarChar(20) // PENDING | APPROVED | DISMISSED
+  fingerprint   String   @db.VarChar(64)
+  templateId    String?  @map("template_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([customerId, status], name: "idx_draft_customer_status")
+  @@index([accountId, status], name: "idx_draft_account_status")
+  @@index([fingerprint], name: "idx_draft_fingerprint")
+  @@map("draft_entries")
+}
+
 enum AccountType {
   PERSONAL
   BUSINESS

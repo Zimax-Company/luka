@@ -6,6 +6,7 @@ import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
 import { getAccessibleAccountIds, scopeByAccount, canAccessAccount } from '@/lib/access';
 import { notifyEntryChange } from '@/lib/notify';
+import { invalidateCategoryModel } from '@/lib/categorizeStore';
 
 // Always use database service (we have MySQL running)
 function getEntryService() {
@@ -169,6 +170,7 @@ export async function POST(request: NextRequest) {
     );
     // Notify other users with access to this account.
     void notifyEntryChange(actor, 'CREATE', transaction as any);
+    invalidateCategoryModel(transaction.accountId); // new labeled data
 
     return NextResponse.json({
       success: true,

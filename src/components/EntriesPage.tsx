@@ -9,6 +9,13 @@ import { PaginationMeta } from '@/lib/pagination';
 
 const PAGE_SIZE = 20;
 
+interface CategorySuggestion {
+  categoryId: string;
+  categoryName: string;
+  type: 'INCOME' | 'EXPENSE';
+  confidence: number;
+}
+
 interface TransactionsSummary {
   totals: {
     income: number;
@@ -70,6 +77,11 @@ export default function EntriesPage() {
   >(null);
   const [resolving, setResolving] = useState(false);
   const [resolveChecked, setResolveChecked] = useState(false);
+
+  // Smart category suggestion state (only for brand-new entries).
+  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
+  const [categoryAutoFilled, setCategoryAutoFilled] = useState(false);
+  const [categoryTouched, setCategoryTouched] = useState(false);
 
   // Fetch data
   const fetchTransactions = async () => {
@@ -218,6 +230,73 @@ export default function EntriesPage() {
     };
   }, [handleTrimmed, canTransfer]);
 
+  // Smart category suggestion: as the note (debounced ~300ms) or amount changes
+  // on a NEW entry, ask the backend for likely categories learned from the
+  // account's own history.
+  useEffect(() => {
+    if (editingTransaction || !showForm || !formData.accountId) {
+      setSuggestions([]);
+      return;
+    }
+    const note = formData.note.trim();
+    const amount = parseFloat(formData.amount);
+    if (!note && !(amount > 0)) {
+      setSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append('accountId', formData.accountId);
+        // Pass the current type (derived from any chosen category) so income and
+        // expense entries are suggested against their own history.
+        if (selectedCategory?.type) params.append('type', selectedCategory.type);
+        params.append('note', note);
+        params.append('amount', String(amount > 0 ? amount : 0));
+        const res = await authFetch(`/api/entries/suggest-category?${params.toString()}`);
+        const json = await res.json();
+        if (cancelled) return;
+        setSuggestions(json?.success ? (json.data?.suggestions ?? []) : []);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.note, formData.amount, formData.accountId, showForm, editingTransaction]);
+
+  // Auto-select the top suggestion when highly confident (≥0.75) — but never
+  // override a category the user explicitly chose.
+  useEffect(() => {
+    const top = suggestions[0];
+    if (!top || categoryTouched) {
+      if (!top) setCategoryAutoFilled(false);
+      return;
+    }
+    if (top.confidence >= 0.75) {
+      setFormData((prev) =>
+        prev.categoryId === top.categoryId ? prev : { ...prev, categoryId: top.categoryId }
+      );
+      setCategoryAutoFilled(true);
+    } else {
+      setCategoryAutoFilled(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, categoryTouched]);
+
+  // Fill the category from a mid-confidence suggestion chip (explicit accept).
+  const applySuggestion = (s: CategorySuggestion) => {
+    setFormData((prev) => ({ ...prev, categoryId: s.categoryId }));
+    setCategoryTouched(true);
+    setCategoryAutoFilled(false);
+  };
+
   // Form handlers
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -330,6 +409,9 @@ export default function EntriesPage() {
     setResolvedRecipient(null);
     setResolving(false);
     setResolveChecked(false);
+    setSuggestions([]);
+    setCategoryAutoFilled(false);
+    setCategoryTouched(false);
     setEditingTransaction(null);
     setShowForm(false);
   };
@@ -578,12 +660,37 @@ export default function EntriesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Category
-                </label>
+                <div className="flex items-center gap-2 mb-1">
+                  <label className="block text-sm font-medium text-muted-foreground">
+                    Category
+                  </label>
+                  {!editingTransaction && categoryAutoFilled && !categoryTouched && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-500">
+                      ✨ Suggested
+                    </span>
+                  )}
+                </div>
+
+                {/* Mid-confidence (0.4–0.75) tappable suggestion chip */}
+                {!editingTransaction && !categoryTouched && suggestions[0] &&
+                  suggestions[0].confidence >= 0.4 && suggestions[0].confidence < 0.75 &&
+                  formData.categoryId !== suggestions[0].categoryId && (
+                    <button
+                      type="button"
+                      onClick={() => applySuggestion(suggestions[0])}
+                      className="mb-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
+                    >
+                      ✨ Suggested: {suggestions[0].categoryName}
+                    </button>
+                  )}
+
                 <select
                   value={formData.categoryId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, categoryId: e.target.value }));
+                    setCategoryTouched(true);
+                    setCategoryAutoFilled(false);
+                  }}
                   className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 >
