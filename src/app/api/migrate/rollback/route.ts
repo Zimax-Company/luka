@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { MigrationRunner } from '@/lib/migrations';
+import { createPrismaClient } from '@/lib/prismaClient';
 
 // POST /api/migrate/rollback - Rollback last batch of migrations
 export async function POST(request: NextRequest) {
   try {
     console.log('🔄 Rolling back last batch of migrations...');
     
-    const prisma = new PrismaClient();
+    const prisma = createPrismaClient();
     const migrationRunner = new MigrationRunner(prisma);
     
     try {

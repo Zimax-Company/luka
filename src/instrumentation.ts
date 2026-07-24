@@ -5,9 +5,11 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-  const { PrismaClient } = await import('@prisma/client');
+  // Use the app's client factory (composes DATABASE_URL from DB_* parts on
+  // Vercel) — a bare `new PrismaClient()` fails there with no DATABASE_URL.
+  const { createPrismaClient } = await import('./lib/prismaClient');
   const { MigrationRunner } = await import('./lib/migrations');
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
 
   try {
     const lock = await prisma.$queryRawUnsafe<Array<{ l: number | null }>>(

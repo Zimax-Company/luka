@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { MigrationRunner } from '@/lib/migrations';
+import { createPrismaClient } from '@/lib/prismaClient';
 
 // GET /api/migrate - Check migration status (Laravel-style)
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     console.log('   DATABASE_URL exists:', !!process.env.DATABASE_URL);
     console.log('   DATABASE_URL host:', process.env.DATABASE_URL?.split('@')[1] || 'not set');
     
-    const prisma = new PrismaClient();
+    const prisma = createPrismaClient();
     const migrationRunner = new MigrationRunner(prisma);
     
     try {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     console.log('   DATABASE_URL exists:', !!process.env.DATABASE_URL);
     console.log('   DATABASE_URL host:', process.env.DATABASE_URL?.split('@')[1] || 'not set');
     
-    const prisma = new PrismaClient();
+    const prisma = createPrismaClient();
     const migrationRunner = new MigrationRunner(prisma);
     
     try {
