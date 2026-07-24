@@ -6,6 +6,7 @@ import { recordAudit } from '@/lib/audit';
 import { canAccessAccount } from '@/lib/access';
 import { notifyEntryChange } from '@/lib/notify';
 import { invalidateCategoryModel } from '@/lib/categorizeStore';
+import { validateItems, replaceEntryItems, getEntryItems } from '@/lib/entryItems';
 
 // GET /api/entries/[id] - Get entry by ID
 export async function GET(
@@ -33,9 +34,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'No access to this entry' }, { status: 403 });
     }
 
+    const items = await getEntryItems(id);
+
     return NextResponse.json({
       success: true,
-      data: transaction,
+      data: { ...transaction, items },
       source: 'database'
     });
 
@@ -76,6 +79,13 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'No access to this entry' }, { status: 403 });
     }
 
+    // Validate optional items against the resulting amount before writing.
+    const newAmount = body.amount != null ? Number(body.amount) : Number(existing.amount) || 0;
+    const { items, error: itemsError } = validateItems((body as any).items, newAmount);
+    if (itemsError) {
+      return NextResponse.json({ success: false, error: itemsError }, { status: 400 });
+    }
+
     const transaction = await PrismaEntryService.update(id, body);
 
     if (!transaction) {
@@ -87,6 +97,10 @@ export async function PUT(
         },
         { status: 404 }
       );
+    }
+
+    if (items != null) {
+      await replaceEntryItems(id, items);
     }
 
     recordAudit(

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
@@ -34,6 +34,206 @@ interface TransactionsSummary {
       type: string;
     }>;
   };
+}
+
+// A line item on the entry form (amount kept as string while editing).
+interface ItemRow {
+  name: string;
+  amount: string;
+  categoryItemId?: string | null;
+}
+
+interface CatalogItem {
+  id: string;
+  categoryId: string;
+  name: string;
+}
+
+// --- Small inline icons (no external packages; CSP blocks them) --------------
+function EditIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+function PlusCircleIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+function WalletIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      <path d="M16 12h.01M3 9h18" />
+    </svg>
+  );
+}
+function CalendarIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+function NoteIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16v16H4Z" />
+      <path d="M8 9h8M8 13h6" />
+    </svg>
+  );
+}
+function TagIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41 12 22l-9-9V4a1 1 0 0 1 1-1h9Z" />
+      <circle cx="7.5" cy="7.5" r="1.5" />
+    </svg>
+  );
+}
+function CoinIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10M9.5 9.5h3.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3h3.5" />
+    </svg>
+  );
+}
+function ListIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+function CloseIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+function SearchIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+function ChevronDownIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+// Searchable / filterable category picker. The catalog can be 100+ entries, so
+// a native <select> is replaced by a button + filterable dropdown panel.
+function SearchableCategorySelect({
+  categories,
+  value,
+  onChange,
+  id,
+}: {
+  categories: Category[];
+  value: string;
+  onChange: (id: string) => void;
+  id?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selected = categories.find((c) => c.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    // Focus the filter input as soon as the panel opens.
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      clearTimeout(t);
+    };
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? categories.filter((c) => c.name.toLowerCase().includes(q))
+    : categories;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-input border border-border rounded-lg text-left text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <span className={selected ? 'text-foreground truncate' : 'text-muted-foreground'}>
+          {selected ? `${selected.name} (${selected.type})` : 'Select a category'}
+        </span>
+        <ChevronDownIcon className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card">
+            <SearchIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search categories…"
+              className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+          </div>
+          <ul className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No categories match “{query}”.</li>
+            ) : (
+              filtered.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(c.id);
+                      setOpen(false);
+                      setQuery('');
+                    }}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-accent ${
+                      c.id === value ? 'bg-accent text-foreground' : 'text-foreground'
+                    }`}
+                  >
+                    <span className="truncate">{c.name}</span>
+                    <span className={`text-xs shrink-0 ${c.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
+                      {c.type}
+                    </span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function EntriesPage() {
@@ -82,6 +282,10 @@ export default function EntriesPage() {
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [categoryAutoFilled, setCategoryAutoFilled] = useState(false);
   const [categoryTouched, setCategoryTouched] = useState(false);
+
+  // Optional per-entry line items + the selected category's item catalog.
+  const [items, setItems] = useState<ItemRow[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
 
   // Fetch data
   const fetchTransactions = async () => {
@@ -185,6 +389,13 @@ export default function EntriesPage() {
     }, 300);
     return () => clearTimeout(handle);
   }, [searchInput]);
+
+  // Line-item running total vs the entry amount. Submit is blocked when the
+  // items' sum exceeds the entry amount (matches the server-side rule).
+  const entryAmount = parseFloat(formData.amount) || 0;
+  const itemsTotal = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const itemsRemaining = entryAmount - itemsTotal;
+  const itemsExceed = Math.round(itemsTotal * 100) > Math.round(entryAmount * 100);
 
   // The selected category's type decides whether a transfer is possible.
   const selectedCategory = categories.find((c) => c.id === formData.categoryId);
@@ -290,6 +501,42 @@ export default function EntriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, categoryTouched]);
 
+  // Load the selected category's item catalog to offer as quick-pick / autocomplete
+  // suggestions for line items (free text is still allowed).
+  useEffect(() => {
+    if (!showForm || !formData.categoryId) {
+      setCatalogItems([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/categories/${formData.categoryId}/items`);
+        const json = await res.json();
+        if (!cancelled) setCatalogItems(json?.success ? (json.data ?? []) : []);
+      } catch {
+        if (!cancelled) setCatalogItems([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.categoryId, showForm]);
+
+  // Item row helpers.
+  const addItem = (preset?: CatalogItem) => {
+    setItems((prev) => [
+      ...prev,
+      { name: preset?.name ?? '', amount: '', categoryItemId: preset?.id ?? null },
+    ]);
+  };
+  const updateItem = (index: number, patch: Partial<ItemRow>) => {
+    setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  };
+  const removeItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
   // Fill the category from a mid-confidence suggestion chip (explicit accept).
   const applySuggestion = (s: CategorySuggestion) => {
     setFormData((prev) => ({ ...prev, categoryId: s.categoryId }));
@@ -305,6 +552,23 @@ export default function EntriesPage() {
       setError('Enter a valid recipient handle or clear the posting field.');
       return;
     }
+
+    // Block when line items add up to more than the entry amount.
+    if (itemsExceed) {
+      setError(
+        `Item total (${formatCurrency(itemsTotal)}) exceeds the entry amount (${formatCurrency(entryAmount)}). Remove items or increase the amount.`
+      );
+      return;
+    }
+
+    // Clean line items: drop blank rows, coerce amounts to numbers.
+    const cleanedItems = items
+      .map((i) => ({
+        name: i.name.trim(),
+        amount: parseFloat(i.amount),
+        categoryItemId: i.categoryItemId ?? null,
+      }))
+      .filter((i) => i.name && i.amount > 0);
 
     try {
       // Route to the transfer endpoint when a recipient handle is set on a
@@ -345,7 +609,8 @@ export default function EntriesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          amount: parseFloat(formData.amount)
+          amount: parseFloat(formData.amount),
+          items: cleanedItems,
         })
       });
 
@@ -363,7 +628,7 @@ export default function EntriesPage() {
     }
   };
 
-  const handleEdit = (transaction: EntryWithCategory) => {
+  const handleEdit = async (transaction: EntryWithCategory) => {
     setEditingTransaction(transaction);
     setFormData({
       accountId: transaction.accountId,
@@ -373,7 +638,25 @@ export default function EntriesPage() {
       amount: transaction.amount.toString(),
       toHandle: ''
     });
+    setItems([]);
     setShowForm(true);
+
+    // Prefill line items from the entry detail (the list rows don't include them).
+    try {
+      const res = await authFetch(`/api/entries/${transaction.id}`);
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.data?.items)) {
+        setItems(
+          json.data.items.map((it: { name: string; amount: number; categoryItemId?: string | null }) => ({
+            name: it.name,
+            amount: String(it.amount),
+            categoryItemId: it.categoryItemId ?? null,
+          }))
+        );
+      }
+    } catch {
+      // Non-critical: fall back to no prefilled items.
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -412,6 +695,8 @@ export default function EntriesPage() {
     setSuggestions([]);
     setCategoryAutoFilled(false);
     setCategoryTouched(false);
+    setItems([]);
+    setCatalogItems([]);
     setEditingTransaction(null);
     setShowForm(false);
   };
@@ -607,172 +892,284 @@ export default function EntriesPage() {
 
       {/* Transaction Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-lg border border-border p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-foreground">
-              {editingTransaction ? 'Edit Entry' : 'Add New Entry'}
-            </h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Account
-                </label>
-                <select
-                  value={formData.accountId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, accountId: e.target.value }))}
-                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select an account</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} ({account.type}) - {formatCurrency(account.currentBalance)}
-                    </option>
-                  ))}
-                </select>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500/15 text-blue-500">
+                  {editingTransaction ? <EditIcon className="w-5 h-5" /> : <PlusCircleIcon className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">
+                    {editingTransaction ? 'Edit Entry' : 'Add New Entry'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {editingTransaction ? 'Update this income or expense' : 'Record a new income or expense'}
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={resetForm}
+                aria-label="Close"
+                className="p-2 -mr-2 -mt-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Note
-                </label>
-                <input
-                  type="text"
-                  value={formData.note}
-                  onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
-                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter note (optional)"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <label className="block text-sm font-medium text-muted-foreground">
-                    Category
+            {/* Body */}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <WalletIcon className="w-4 h-4" /> Account
                   </label>
-                  {!editingTransaction && categoryAutoFilled && !categoryTouched && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-500">
-                      ✨ Suggested
-                    </span>
-                  )}
+                  <select
+                    value={formData.accountId}
+                    onChange={(e) => setFormData(prev => ({ ...prev, accountId: e.target.value }))}
+                    className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select an account</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} ({account.type}) - {formatCurrency(account.currentBalance)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Mid-confidence (0.4–0.75) tappable suggestion chip */}
-                {!editingTransaction && !categoryTouched && suggestions[0] &&
-                  suggestions[0].confidence >= 0.4 && suggestions[0].confidence < 0.75 &&
-                  formData.categoryId !== suggestions[0].categoryId && (
-                    <button
-                      type="button"
-                      onClick={() => applySuggestion(suggestions[0])}
-                      className="mb-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
-                    >
-                      ✨ Suggested: {suggestions[0].categoryName}
-                    </button>
-                  )}
-
-                <select
-                  value={formData.categoryId}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, categoryId: e.target.value }));
-                    setCategoryTouched(true);
-                    setCategoryAutoFilled(false);
-                  }}
-                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name} ({category.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Amount
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00 NGN"
-                  required
-                />
-              </div>
-
-              {/* Transfer: only offered for new EXPENSE entries */}
-              {canTransfer && (
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Post to account (@handle)
-                    <span className="ml-1 text-xs text-muted-foreground/70">optional</span>
-                  </label>
-                  <div className="flex items-center bg-input border border-border rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
-                    <span className="text-muted-foreground">@</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                      <CalendarIcon className="w-4 h-4" /> Date
+                    </label>
                     <input
-                      type="text"
-                      value={formData.toHandle.replace(/^@/, '')}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          toHandle: e.target.value.replace(/^@/, '').toLowerCase(),
-                        }))
-                      }
-                      className="w-full bg-transparent py-2 pl-1 text-foreground focus:outline-none"
-                      placeholder="recipient handle"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
                     />
                   </div>
-                  {handleTrimmed.length > 0 && (
-                    <p className="mt-1 text-xs">
-                      {resolving ? (
-                        <span className="text-muted-foreground">Checking…</span>
-                      ) : resolvedRecipient ? (
-                        <span className="text-green-400">→ {resolvedRecipient.name.toUpperCase()}</span>
-                      ) : resolveChecked ? (
-                        <span className="text-muted-foreground">No account found for that handle</span>
-                      ) : null}
-                    </p>
+
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                      <CoinIcon className="w-4 h-4" /> Amount
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.amount}
+                      onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                      className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00 NGN"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <NoteIcon className="w-4 h-4" /> Note
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.note}
+                    onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
+                    className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter note (optional)"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                      <TagIcon className="w-4 h-4" /> Category
+                    </label>
+                    {!editingTransaction && categoryAutoFilled && !categoryTouched && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-500">
+                        ✨ Suggested
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Mid-confidence (0.4–0.75) tappable suggestion chip */}
+                  {!editingTransaction && !categoryTouched && suggestions[0] &&
+                    suggestions[0].confidence >= 0.4 && suggestions[0].confidence < 0.75 &&
+                    formData.categoryId !== suggestions[0].categoryId && (
+                      <button
+                        type="button"
+                        onClick={() => applySuggestion(suggestions[0])}
+                        className="mb-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
+                      >
+                        ✨ Suggested: {suggestions[0].categoryName}
+                      </button>
+                    )}
+
+                  <SearchableCategorySelect
+                    categories={categories}
+                    value={formData.categoryId}
+                    onChange={(id) => {
+                      setFormData(prev => ({ ...prev, categoryId: id }));
+                      setCategoryTouched(true);
+                      setCategoryAutoFilled(false);
+                    }}
+                  />
+                </div>
+
+                {/* Optional line items */}
+                <div className="rounded-xl border border-border bg-muted/40 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                      <ListIcon className="w-4 h-4 text-muted-foreground" />
+                      Items
+                      <span className="text-xs font-normal text-muted-foreground">optional</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addItem()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-card border border-border text-foreground hover:bg-accent transition-colors"
+                    >
+                      <PlusCircleIcon className="w-4 h-4" /> Add item
+                    </button>
+                  </div>
+
+                  {/* Quick-pick from the category's catalog */}
+                  {catalogItems.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {catalogItems.map((ci) => (
+                        <button
+                          key={ci.id}
+                          type="button"
+                          onClick={() => addItem(ci)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
+                        >
+                          + {ci.name}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  {isTransfer && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      This will record the expense now and queue a pending posting for the recipient to accept.
+
+                  {items.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Break this entry into line items (e.g. individual products). Free text is allowed; pick from the catalog above for quick entry.
                     </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            list={`catalog-${idx}`}
+                            value={item.name}
+                            onChange={(e) => {
+                              const name = e.target.value;
+                              const match = catalogItems.find((ci) => ci.name === name);
+                              updateItem(idx, { name, categoryItemId: match?.id ?? null });
+                            }}
+                            placeholder="Item name"
+                            className="flex-1 min-w-0 px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <datalist id={`catalog-${idx}`}>
+                            {catalogItems.map((ci) => (
+                              <option key={ci.id} value={ci.name} />
+                            ))}
+                          </datalist>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={item.amount}
+                            onChange={(e) => updateItem(idx, { amount: e.target.value })}
+                            placeholder="0.00"
+                            className="w-28 px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            aria-label="Remove item"
+                            className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
+                          >
+                            <CloseIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {items.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Total <span className="font-medium text-foreground">{formatCurrency(itemsTotal)}</span>
+                      </span>
+                      <span className={itemsExceed ? 'text-red-400 font-medium' : 'text-muted-foreground'}>
+                        {itemsExceed
+                          ? `Over by ${formatCurrency(Math.abs(itemsRemaining))}`
+                          : `Remaining ${formatCurrency(itemsRemaining)}`}
+                      </span>
+                    </div>
                   )}
                 </div>
-              )}
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={transferBlocked}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-                >
-                  {isTransfer ? 'Post to account' : editingTransaction ? 'Update' : 'Create'}
-                </button>
+                {/* Transfer: only offered for new EXPENSE entries */}
+                {canTransfer && (
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                      <WalletIcon className="w-4 h-4" /> Post to account (@handle)
+                      <span className="text-xs text-muted-foreground/70">optional</span>
+                    </label>
+                    <div className="flex items-center bg-input border border-border rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
+                      <span className="text-muted-foreground">@</span>
+                      <input
+                        type="text"
+                        value={formData.toHandle.replace(/^@/, '')}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            toHandle: e.target.value.replace(/^@/, '').toLowerCase(),
+                          }))
+                        }
+                        className="w-full bg-transparent py-2 pl-1 text-foreground focus:outline-none"
+                        placeholder="recipient handle"
+                      />
+                    </div>
+                    {handleTrimmed.length > 0 && (
+                      <p className="mt-1 text-xs">
+                        {resolving ? (
+                          <span className="text-muted-foreground">Checking…</span>
+                        ) : resolvedRecipient ? (
+                          <span className="text-green-400">→ {resolvedRecipient.name.toUpperCase()}</span>
+                        ) : resolveChecked ? (
+                          <span className="text-muted-foreground">No account found for that handle</span>
+                        ) : null}
+                      </p>
+                    )}
+                    {isTransfer && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This will record the expense now and queue a pending posting for the recipient to accept.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 px-6 py-4 border-t border-border bg-card">
                 <button
                   type="button"
                   onClick={resetForm}
                   className="flex-1 px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg font-medium transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferBlocked || itemsExceed}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                >
+                  {isTransfer ? 'Post to account' : editingTransaction ? 'Update' : 'Create'}
                 </button>
               </div>
             </form>

@@ -7,6 +7,7 @@ import { recordAudit } from '@/lib/audit';
 import { getAccessibleAccountIds, scopeByAccount, canAccessAccount } from '@/lib/access';
 import { notifyEntryChange } from '@/lib/notify';
 import { invalidateCategoryModel } from '@/lib/categorizeStore';
+import { validateItems, replaceEntryItems } from '@/lib/entryItems';
 
 // Always use database service (we have MySQL running)
 function getEntryService() {
@@ -158,7 +159,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No access to this account' }, { status: 403 });
     }
 
+    // Optional line items must not exceed the entry amount.
+    const { items, error: itemsError } = validateItems((body as any).items, Number(body.amount) || 0);
+    if (itemsError) {
+      return NextResponse.json({ success: false, error: itemsError }, { status: 400 });
+    }
+
     const transaction = await service.create(body);
+    if (items && items.length) {
+      await replaceEntryItems(transaction.id, items);
+    }
 
     const kind = transaction.category?.type === 'INCOME' ? 'income' : 'expense';
     recordAudit(

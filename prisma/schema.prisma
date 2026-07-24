@@ -53,6 +53,7 @@ model Customer {
   rootEmail String   @map("root_email") @db.VarChar(255)
   plan      String   @default("FREE") @db.VarChar(50)
   status    String   @default("ACTIVE") @db.VarChar(50) // active for everyone, for now
+  onboardingDismissed Boolean @default(false) @map("onboarding_dismissed")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -176,8 +177,9 @@ model Category {
   updatedAt DateTime    @updatedAt @map("updated_at")
   
   // Relationships
-  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account      Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
   entries      Entry[]
+  items        CategoryItem[]
 
   @@unique([accountId, name, type], name: "unique_account_name_type")
   @@index([accountId], name: "idx_categories_account_id")
@@ -198,8 +200,9 @@ model Entry {
   updatedAt  DateTime @updatedAt @map("updated_at")
   
   // Relationships
-  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  items      EntryItem[]
 
   @@index([accountId], name: "idx_transactions_account_id")
   @@index([date], name: "idx_date")
@@ -289,6 +292,36 @@ model DraftEntry {
   @@index([accountId, status], name: "idx_draft_account_status")
   @@index([fingerprint], name: "idx_draft_fingerprint")
   @@map("draft_entries")
+}
+
+// Reusable catalog of items under a category (e.g. Milk under Groceries).
+model CategoryItem {
+  id         String   @id @default(cuid())
+  categoryId String   @map("category_id")
+  name       String   @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, name], name: "unique_category_item")
+  @@index([categoryId], name: "idx_catitem_category")
+  @@map("category_items")
+}
+
+// Optional per-entry line items breaking down the entry amount. The sum of item
+// amounts must not exceed the entry's amount (remainder stays unitemized).
+model EntryItem {
+  id             String   @id @default(cuid())
+  entryId        String   @map("entry_id")
+  categoryItemId String?  @map("category_item_id") // catalog item, if picked
+  name           String   @db.VarChar(255)
+  amount         Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId], name: "idx_entryitem_entry")
+  @@map("entry_items")
 }
 
 enum AccountType {

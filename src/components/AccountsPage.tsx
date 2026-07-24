@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Account, AccountWithStats, AccountType, CreateAccountRequest } from '@/types/account';
+import { Account, AccountWithStats, AccountType, CreateAccountRequest, UpdateAccountRequest } from '@/types/account';
 import { authFetch } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import AccountMembersModal from '@/components/AccountMembersModal';
@@ -22,8 +22,12 @@ export default function AccountsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [showMembers, setShowMembers] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState<UpdateAccountRequest>({});
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
+  const canEdit = currentUser?.role !== 'VIEWER';
   
   const [newAccount, setNewAccount] = useState<CreateAccountRequest>({
     userId: 'user_admin_001', // Default admin user for now
@@ -98,6 +102,39 @@ export default function AccountsPage() {
       console.error('Error creating account:', error);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openSettings = (account: AccountWithStats) => {
+    setSettingsForm({
+      name: account.name,
+      handle: account.handle ?? '',
+      description: account.description ?? '',
+      type: account.type,
+      isActive: account.isActive,
+    });
+    setShowSettings(true);
+  };
+
+  const saveSettings = async () => {
+    if (!selectedAccountId || !settingsForm.name?.trim()) return;
+
+    setSavingSettings(true);
+    try {
+      const response = await authFetch(`/api/accounts/${selectedAccountId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settingsForm),
+      });
+
+      if (response.ok) {
+        await fetchAccounts();
+        setShowSettings(false);
+      }
+    } catch (error) {
+      console.error('Error updating account:', error);
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -299,8 +336,10 @@ export default function AccountsPage() {
                     </a>
                     
                     <button
-                      className="bg-muted hover:bg-accent border border-border rounded-lg p-4 text-center transition-colors"
-                      onClick={() => {/* TODO: Implement settings */}}
+                      className="bg-muted hover:bg-accent border border-border rounded-lg p-4 text-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => openSettings(selectedAccount)}
+                      disabled={!canEdit}
+                      title={canEdit ? 'Edit account settings' : 'You have read-only access'}
                     >
                       <div className="text-2xl mb-2">⚙️</div>
                       <p className="text-sm font-medium">Account Settings</p>
@@ -352,6 +391,152 @@ export default function AccountsPage() {
             accountName={selectedAccount.name}
             onClose={() => setShowMembers(false)}
           />
+        )}
+
+        {/* Account Settings / Edit Modal */}
+        {showSettings && selectedAccount && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500/15 text-blue-500">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">Account Settings</h2>
+                    <p className="text-sm text-muted-foreground">Edit “{selectedAccount.name}”</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  aria-label="Close"
+                  className="p-2 -mr-2 -mt-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.59 13.41 12 22l-9-9V4a1 1 0 0 1 1-1h9Z" />
+                      <circle cx="7.5" cy="7.5" r="1.5" />
+                    </svg>
+                    Account Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.name ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, name: e.target.value })}
+                    placeholder="Enter account name"
+                    className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <span className="text-muted-foreground">@</span> Handle
+                  </label>
+                  <div className="flex items-center bg-input border border-border rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
+                    <span className="text-muted-foreground">@</span>
+                    <input
+                      type="text"
+                      value={settingsForm.handle ?? ''}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          handle: e.target.value.replace(/^@/, '').toLowerCase(),
+                        })
+                      }
+                      placeholder="handle used for transfers"
+                      className="w-full bg-transparent py-2 pl-1 text-foreground focus:outline-none"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A globally-unique handle used for transfers. De-duplicated on save.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16v16H4Z" />
+                      <path d="M8 9h8M8 13h6" />
+                    </svg>
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.description ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, description: e.target.value })}
+                    placeholder="Enter description (optional)"
+                    className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="14" rx="2" />
+                      <path d="M3 10h18" />
+                    </svg>
+                    Account Type
+                  </label>
+                  <select
+                    value={settingsForm.type ?? selectedAccount.type}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, type: e.target.value as AccountType })}
+                    className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {ACCOUNT_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label} - {type.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 cursor-pointer">
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">Active</span>
+                    <span className="block text-xs text-muted-foreground">Inactive accounts are hidden from most views.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settingsForm.isActive ?? true}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, isActive: e.target.checked })}
+                    className="h-5 w-5 accent-blue-600"
+                  />
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 px-6 py-4 border-t border-border bg-card">
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 bg-muted hover:bg-accent text-foreground px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={savingSettings}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSettings}
+                  disabled={savingSettings || !settingsForm.name?.trim()}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-muted disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {savingSettings ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Create Account Modal */}

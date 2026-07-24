@@ -7,6 +7,36 @@ export interface Migration {
   down: (prisma: PrismaClient) => Promise<void>;
 }
 
+// ---- Schema-introspection helpers (MySQL lacks ADD COLUMN/INDEX IF NOT EXISTS) ----
+async function tableExists(prisma: PrismaClient, table: string): Promise<boolean> {
+  const r = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
+    `SELECT COUNT(*) c FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${table}'`,
+  );
+  return Number(r[0]?.c ?? 0) > 0;
+}
+async function columnExists(prisma: PrismaClient, table: string, col: string): Promise<boolean> {
+  const r = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
+    `SELECT COUNT(*) c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${table}' AND COLUMN_NAME = '${col}'`,
+  );
+  return Number(r[0]?.c ?? 0) > 0;
+}
+async function indexExists(prisma: PrismaClient, table: string, index: string): Promise<boolean> {
+  const r = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
+    `SELECT COUNT(*) c FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${table}' AND INDEX_NAME = '${index}'`,
+  );
+  return Number(r[0]?.c ?? 0) > 0;
+}
+async function addColumn(prisma: PrismaClient, table: string, col: string, ddl: string): Promise<void> {
+  if (!(await columnExists(prisma, table, col))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+async function addIndex(prisma: PrismaClient, table: string, index: string, ddl: string): Promise<void> {
+  if (!(await indexExists(prisma, table, index))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE ${table} ADD ${ddl}`);
+  }
+}
+
 // Built-in migrations (since we can't dynamically import in serverless)
 export const MIGRATIONS: Migration[] = [
   {
@@ -566,7 +596,7 @@ export const MIGRATIONS: Migration[] = [
     },
     async down(prisma: PrismaClient) {
       console.log('🗑️ Removing user relationship from accounts...');
-      
+
       try {
         // Remove foreign key constraint
         try {
@@ -576,7 +606,7 @@ export const MIGRATIONS: Migration[] = [
         } catch (e) {
           console.log('ℹ️  fk_accounts_user_id constraint not found');
         }
-        
+
         // Remove index
         try {
           await prisma.$executeRaw`
@@ -585,13 +615,13 @@ export const MIGRATIONS: Migration[] = [
         } catch (e) {
           console.log('ℹ️  idx_accounts_user_id index not found');
         }
-        
+
         // Remove user_id column
         const columns = await prisma.$queryRaw`
-          SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+          SELECT COLUMN_NAME FROM information_schema.COLUMNS
           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'user_id'
         `;
-        
+
         if ((columns as any[]).length > 0) {
           try {
             await prisma.$executeRaw`
@@ -601,13 +631,295 @@ export const MIGRATIONS: Migration[] = [
             console.log('ℹ️  Could not drop user_id from accounts');
           }
         }
-        
+
         console.log('✅ User relationship removed from accounts');
       } catch (error) {
         console.error('Error removing user relationship:', error);
         throw error;
       }
     }
+  },
+  {
+    id: '009_rename_transactions_to_entries',
+    description: 'Rename transactions table to entries',
+    async up(prisma) {
+      if ((await tableExists(prisma, 'transactions')) && !(await tableExists(prisma, 'entries'))) {
+        await prisma.$executeRawUnsafe(`RENAME TABLE transactions TO entries`);
+      }
+    },
+    async down(prisma) {
+      if ((await tableExists(prisma, 'entries')) && !(await tableExists(prisma, 'transactions'))) {
+        await prisma.$executeRawUnsafe(`RENAME TABLE entries TO transactions`);
+      }
+    },
+  },
+  {
+    id: '010_create_customers_billing',
+    description: 'Customers (billable accounts), subscription events, audit logs, users.customer_id',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS customers (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          root_email VARCHAR(255) NOT NULL,
+          plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
+          status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          INDEX idx_customers_root_email (root_email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS subscription_events (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          customer_id VARCHAR(191) NOT NULL,
+          plan VARCHAR(50) NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          amount DECIMAL(10,2) NULL,
+          currency VARCHAR(3) NULL,
+          note TEXT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          INDEX idx_subevents_customer (customer_id),
+          INDEX idx_subevents_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          customer_id VARCHAR(191) NULL,
+          actor_id VARCHAR(191) NULL,
+          actor_email VARCHAR(255) NOT NULL,
+          action VARCHAR(20) NOT NULL,
+          resource VARCHAR(50) NOT NULL,
+          resource_id VARCHAR(191) NULL,
+          summary TEXT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          INDEX idx_audit_customer (customer_id),
+          INDEX idx_audit_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await addColumn(prisma, 'users', 'customer_id', `customer_id VARCHAR(191) NULL`);
+      await addIndex(prisma, 'users', 'idx_users_customer_id', `INDEX idx_users_customer_id (customer_id)`);
+      // Seed a default customer for the default admin and link unassigned users.
+      await prisma.$executeRawUnsafe(`
+        INSERT IGNORE INTO customers (id, name, root_email, plan, status)
+        VALUES ('cust_default_001', 'Default', 'admin@example.com', 'FREE', 'ACTIVE')`);
+      await prisma.$executeRawUnsafe(`UPDATE users SET customer_id = 'cust_default_001' WHERE customer_id IS NULL`);
+      await prisma.$executeRawUnsafe(`
+        INSERT IGNORE INTO subscription_events (id, customer_id, plan, type)
+        VALUES ('subevt_default_001', 'cust_default_001', 'FREE', 'ACTIVATED')`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS subscription_events`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS audit_logs`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS customers`);
+      if (await columnExists(prisma, 'users', 'customer_id')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE users DROP COLUMN customer_id`);
+      }
+    },
+  },
+  {
+    id: '011_account_access_and_notifications',
+    description: 'Per-account access grants, in-app notifications, accounts.customer_id + backfill',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS account_access (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          user_id VARCHAR(191) NOT NULL,
+          account_id VARCHAR(191) NOT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE KEY unique_user_account (user_id, account_id),
+          KEY idx_access_user (user_id),
+          KEY idx_access_account (account_id),
+          CONSTRAINT fk_access_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          CONSTRAINT fk_access_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          customer_id VARCHAR(191) NULL,
+          recipient_id VARCHAR(191) NOT NULL,
+          actor_id VARCHAR(191) NULL,
+          actor_name VARCHAR(255) NOT NULL,
+          action VARCHAR(20) NOT NULL,
+          resource VARCHAR(50) NOT NULL,
+          resource_id VARCHAR(191) NULL,
+          account_id VARCHAR(191) NULL,
+          account_name VARCHAR(255) NULL,
+          summary TEXT NULL,
+          read_at DATETIME(3) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_notif_recipient (recipient_id, read_at),
+          KEY idx_notif_customer (customer_id),
+          KEY idx_notif_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await addColumn(prisma, 'accounts', 'customer_id', `customer_id VARCHAR(191) NULL`);
+      await addIndex(prisma, 'accounts', 'idx_accounts_customer_id', `INDEX idx_accounts_customer_id (customer_id)`);
+      await prisma.$executeRawUnsafe(`
+        UPDATE accounts a JOIN users u ON a.user_id = u.id
+        SET a.customer_id = u.customer_id WHERE a.customer_id IS NULL`);
+      await prisma.$executeRawUnsafe(`
+        INSERT IGNORE INTO account_access (id, user_id, account_id, created_at)
+        SELECT CONCAT('acc_', SUBSTRING(MD5(CONCAT(u.id, ':', a.id)), 1, 24)), u.id, a.id, NOW(3)
+        FROM users u JOIN accounts a ON a.customer_id = u.customer_id
+        WHERE u.role <> 'ADMIN' AND u.is_active = TRUE`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS account_access`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS notifications`);
+      if (await columnExists(prisma, 'accounts', 'customer_id')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE accounts DROP COLUMN customer_id`);
+      }
+    },
+  },
+  {
+    id: '012_account_handles_and_transfers',
+    description: 'Globally-unique account @handles + handle-addressed transfers',
+    async up(prisma) {
+      await addColumn(prisma, 'accounts', 'handle', `handle VARCHAR(64) NULL`);
+      await prisma.$executeRawUnsafe(`
+        UPDATE accounts a
+        JOIN (
+          SELECT id, CASE WHEN rn = 1 THEN slug ELSE CONCAT(slug, '_', SUBSTRING(id, -4)) END AS h
+          FROM (
+            SELECT id, slug, ROW_NUMBER() OVER (PARTITION BY slug ORDER BY created_at) AS rn
+            FROM (
+              SELECT id, created_at,
+                NULLIF(TRIM(BOTH '_' FROM LOWER(REGEXP_REPLACE(TRIM(name), '[^a-zA-Z0-9]+', '_'))), '') AS slug
+              FROM accounts
+            ) base
+          ) ranked
+        ) gen ON gen.id = a.id
+        SET a.handle = COALESCE(gen.h, CONCAT('acct_', SUBSTRING(a.id, -6)))
+        WHERE a.handle IS NULL`);
+      await addIndex(prisma, 'accounts', 'accounts_handle_key', `UNIQUE INDEX accounts_handle_key (handle)`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS transfers (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          from_account_id VARCHAR(191) NOT NULL,
+          to_account_id VARCHAR(191) NOT NULL,
+          from_entry_id VARCHAR(191) NULL,
+          to_entry_id VARCHAR(191) NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          note TEXT NULL,
+          date DATE NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+          sender_id VARCHAR(191) NULL,
+          sender_name VARCHAR(255) NOT NULL,
+          from_account_name VARCHAR(255) NULL,
+          to_handle VARCHAR(64) NULL,
+          decided_by_id VARCHAR(191) NULL,
+          decided_by_name VARCHAR(255) NULL,
+          decided_at DATETIME(3) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_transfer_to_status (to_account_id, status),
+          KEY idx_transfer_from (from_account_id),
+          KEY idx_transfer_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS transfers`);
+      if (await indexExists(prisma, 'accounts', 'accounts_handle_key')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE accounts DROP INDEX accounts_handle_key`);
+      }
+      if (await columnExists(prisma, 'accounts', 'handle')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE accounts DROP COLUMN handle`);
+      }
+    },
+  },
+  {
+    id: '013_recurring_templates_and_drafts',
+    description: 'Phase 1: recurring schedules + review-inbox draft entries',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS recurring_templates (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          customer_id VARCHAR(191) NULL,
+          account_id VARCHAR(191) NOT NULL,
+          category_id VARCHAR(191) NOT NULL,
+          type ENUM('INCOME','EXPENSE') NOT NULL,
+          amount DECIMAL(10,2) NULL,
+          note TEXT NULL,
+          cadence VARCHAR(20) NOT NULL,
+          day_of_month INT NULL,
+          day_of_week INT NULL,
+          auto_post TINYINT(1) NOT NULL DEFAULT 0,
+          active TINYINT(1) NOT NULL DEFAULT 1,
+          next_run_on DATE NOT NULL,
+          last_run_on DATE NULL,
+          created_by_id VARCHAR(191) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_recurring_due (active, next_run_on),
+          KEY idx_recurring_account (account_id),
+          KEY idx_recurring_customer (customer_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS draft_entries (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          customer_id VARCHAR(191) NULL,
+          account_id VARCHAR(191) NOT NULL,
+          category_id VARCHAR(191) NULL,
+          suggested_conf DOUBLE NULL,
+          type ENUM('INCOME','EXPENSE') NOT NULL,
+          amount DECIMAL(10,2) NULL,
+          note TEXT NULL,
+          date DATE NOT NULL,
+          source VARCHAR(20) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+          fingerprint VARCHAR(64) NOT NULL,
+          template_id VARCHAR(191) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_draft_customer_status (customer_id, status),
+          KEY idx_draft_account_status (account_id, status),
+          KEY idx_draft_fingerprint (fingerprint)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS draft_entries`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS recurring_templates`);
+    },
+  },
+  {
+    id: '014_category_and_entry_items',
+    description: 'Category item catalog + optional per-entry line items',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS category_items (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          category_id VARCHAR(191) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE KEY unique_category_item (category_id, name),
+          KEY idx_catitem_category (category_id),
+          CONSTRAINT fk_catitem_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS entry_items (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          entry_id VARCHAR(191) NOT NULL,
+          category_item_id VARCHAR(191) NULL,
+          name VARCHAR(255) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_entryitem_entry (entry_id),
+          CONSTRAINT fk_entryitem_entry FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS entry_items`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS category_items`);
+    },
+  },
+  {
+    id: '015_customer_onboarding',
+    description: 'Track onboarding dismissal on customers',
+    async up(prisma) {
+      await addColumn(prisma, 'customers', 'onboarding_dismissed', `onboarding_dismissed TINYINT(1) NOT NULL DEFAULT 0`);
+    },
+    async down(prisma) {
+      if (await columnExists(prisma, 'customers', 'onboarding_dismissed')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE customers DROP COLUMN onboarding_dismissed`);
+      }
+    },
   }
 ];
 
@@ -705,9 +1017,10 @@ export class MigrationRunner {
         // Run the migration
         await migration.up(this.prisma);
         
-        // Record the migration as executed
+        // Record the migration as executed (INSERT IGNORE so overlapping runs
+        // during a deploy can't fail on a duplicate id).
         await this.prisma.$executeRaw`
-          INSERT INTO migrations (id, batch) VALUES (${migration.id}, ${nextBatch})
+          INSERT IGNORE INTO migrations (id, batch) VALUES (${migration.id}, ${nextBatch})
         `;
         
         executed.push(migration.id);

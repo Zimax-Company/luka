@@ -58,6 +58,24 @@ interface DashboardAccount {
   name: string;
 }
 
+interface OnboardingStep {
+  key: string;
+  title: string;
+  done: boolean;
+}
+
+interface OnboardingState {
+  steps: OnboardingStep[];
+  complete: boolean;
+  dismissed: boolean;
+}
+
+// Map a step key to its call-to-action destination.
+const STEP_CTA: Record<string, { href: string; label: string }> = {
+  account: { href: '/accounts', label: 'Create an account' },
+  category: { href: '/categories', label: 'Add a category' },
+};
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function DashboardContent() {
@@ -72,6 +90,31 @@ export default function DashboardContent() {
   // The dashboard defaults to the current calendar year; 'all' shows every year.
   const [year, setYear] = useState<number | 'all'>(CURRENT_YEAR);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+
+  // New-customer setup checklist. Hidden once complete or dismissed.
+  useEffect(() => {
+    const fetchOnboarding = async () => {
+      try {
+        const res = await authFetch('/api/onboarding');
+        const data = await res.json();
+        if (data.success) setOnboarding(data.data);
+      } catch {
+        // Non-critical: the checklist simply won't render.
+      }
+    };
+    fetchOnboarding();
+  }, []);
+
+  const dismissOnboarding = async () => {
+    // Optimistically hide the card, then persist the dismissal.
+    setOnboarding((prev) => (prev ? { ...prev, dismissed: true } : prev));
+    try {
+      await authFetch('/api/onboarding/dismiss', { method: 'POST' });
+    } catch {
+      // Ignore: it will reappear on next load if the request failed.
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -247,6 +290,65 @@ export default function DashboardContent() {
         </div>
         {yearFilter}
       </div>
+
+      {/* New-customer onboarding checklist */}
+      {onboarding && !onboarding.complete && !onboarding.dismissed && (() => {
+        const firstUndone = onboarding.steps.find((s) => !s.done);
+        const cta = firstUndone ? STEP_CTA[firstUndone.key] : undefined;
+        const doneCount = onboarding.steps.filter((s) => s.done).length;
+        return (
+          <div className="mb-8 rounded-xl border border-blue-500/30 bg-blue-500/5 p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">👋</span>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Welcome to Luka!</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Finish setting up your workspace ({doneCount}/{onboarding.steps.length} done)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={dismissOnboarding}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+
+            <ul className="space-y-2 mb-4">
+              {onboarding.steps.map((step) => (
+                <li key={step.key} className="flex items-center gap-3">
+                  <span
+                    className={`flex items-center justify-center w-6 h-6 rounded-full shrink-0 ${
+                      step.done
+                        ? 'bg-green-500/20 text-green-500'
+                        : 'border-2 border-border text-transparent'
+                    }`}
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <span className={step.done ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                    {step.title}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            {cta && (
+              <Link
+                href={cta.href}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {cta.label}
+                <span aria-hidden>→</span>
+              </Link>
+            )}
+          </div>
+        );
+      })()}
 
       {error && (
         <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-300">

@@ -3,6 +3,135 @@
 import React, { useState, useEffect } from 'react'
 import { Category, CreateCategoryRequest, UpdateCategoryRequest } from '@/types/category'
 import { authFetch } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
+
+interface CatalogItem {
+  id: string
+  categoryId: string
+  name: string
+}
+
+// Expandable per-category item catalog manager. Write actions (add/remove) are
+// gated to editors/admins; the server enforces the same rule.
+function CategoryItemsPanel({ categoryId, canWrite }: { categoryId: string; canWrite: boolean }) {
+  const [items, setItems] = useState<CatalogItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchItems = async () => {
+    setLoading(true)
+    try {
+      const res = await authFetch(`/api/categories/${categoryId}/items`)
+      const data = await res.json()
+      if (data.success) setItems(data.data)
+      else setError(data.error || 'Failed to load items')
+    } catch {
+      setError('Failed to load items')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchItems()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryId])
+
+  const addItem = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = newName.trim()
+    if (!name) return
+    setAdding(true)
+    setError(null)
+    try {
+      const res = await authFetch(`/api/categories/${categoryId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setItems((prev) => (prev.some((i) => i.id === data.data.id) ? prev : [...prev, data.data]))
+        setNewName('')
+      } else {
+        setError(data.error || 'Failed to add item')
+      }
+    } catch {
+      setError('Failed to add item')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const removeItem = async (itemId: string) => {
+    try {
+      const res = await authFetch(`/api/categories/${categoryId}/items/${itemId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) setItems((prev) => prev.filter((i) => i.id !== itemId))
+      else setError(data.error || 'Failed to remove item')
+    } catch {
+      setError('Failed to remove item')
+    }
+  }
+
+  return (
+    <div className="border-t border-border px-4 py-4 bg-muted/40">
+      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading items…</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground mb-3">No items in this catalog yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {items.map((item) => (
+            <span
+              key={item.id}
+              className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-sm bg-card border border-border text-foreground"
+            >
+              {item.name}
+              {canWrite && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.id)}
+                  aria-label={`Remove ${item.name}`}
+                  className="flex items-center justify-center w-5 h-5 rounded-full text-muted-foreground hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {canWrite ? (
+        <form onSubmit={addItem} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Add an item (e.g. a product name)"
+            className="flex-1 min-w-0 px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newName.trim()}
+            className="px-3 py-2 bg-primary text-primary-foreground hover:opacity-80 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {adding ? 'Adding…' : 'Add'}
+          </button>
+        </form>
+      ) : (
+        <p className="text-xs text-muted-foreground">You have read-only access to this catalog.</p>
+      )}
+    </div>
+  )
+}
 
 interface CategoryFormProps {
   category?: Category
@@ -83,6 +212,9 @@ export default function CategoriesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [filterType, setFilterType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL')
   const [page, setPage] = useState(1)
+  const [expandedItemsId, setExpandedItemsId] = useState<string | null>(null)
+  const { currentUser } = useAuth()
+  const canWrite = currentUser?.role !== 'VIEWER'
 
   const PAGE_SIZE = 20
 
@@ -290,36 +422,57 @@ export default function CategoriesPage() {
             {paginatedCategories.map((category: Category) => (
               <div
                 key={category.id}
-                className="flex items-center justify-between p-4 border border-border rounded-lg bg-card hover:bg-accent transition-colors"
+                className="border border-border rounded-lg bg-card overflow-hidden transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg text-2xl ${
-                    category.type === 'INCOME' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                  }`}>
-                    {category.type === 'INCOME' ? '💰' : '💳'}
+                <div className="flex items-center justify-between p-4 hover:bg-accent transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-lg text-2xl ${
+                      category.type === 'INCOME' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                    }`}>
+                      {category.type === 'INCOME' ? '💰' : '💳'}
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-foreground">{category.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {category.type} • Created {new Date(category.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-medium text-foreground">{category.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {category.type} • Created {new Date(category.createdAt).toLocaleDateString()}
-                    </p>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        setExpandedItemsId((prev) => (prev === category.id ? null : category.id))
+                      }
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        expandedItemsId === category.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                      </svg>
+                      Items
+                    </button>
+                    <button
+                      onClick={() => setEditingCategory(category)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => deleteCategory(category.id)}
+                      className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setEditingCategory(category)}
-                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => deleteCategory(category.id)}
-                    className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                  >
-                    🗑️
-                  </button>
-                </div>
+
+                {expandedItemsId === category.id && (
+                  <CategoryItemsPanel categoryId={category.id} canWrite={canWrite} />
+                )}
               </div>
             ))}
           </div>
