@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '@/lib/api';
 import { Category } from '@/types/category';
+import { formatAmountInput, parseAmount } from '@/lib/amount';
 
 interface Draft {
   id: string;
@@ -81,7 +82,7 @@ export default function InboxPage() {
             d.id,
             {
               categoryId: d.categoryId ?? '',
-              amount: d.amount == null ? '' : String(d.amount),
+              amount: d.amount == null ? '' : formatAmountInput(String(d.amount)),
               note: d.note ?? '',
             },
           ])
@@ -109,7 +110,7 @@ export default function InboxPage() {
       setError('Choose a category before approving.');
       return;
     }
-    const amount = parseFloat(edit.amount);
+    const amount = parseAmount(edit.amount);
     if (!(amount > 0)) {
       setError('Enter a valid amount before approving.');
       return;
@@ -176,7 +177,7 @@ export default function InboxPage() {
     <div className="container mx-auto px-6 py-8 max-w-4xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2 text-foreground">📥 Review Inbox</h1>
+          <h1 className="text-3xl font-bold mb-2 text-foreground">📥 Inbox</h1>
           <p className="text-muted-foreground">Confirm items before they land in your books</p>
         </div>
         {drafts.length > 0 && (
@@ -275,10 +276,10 @@ export default function InboxPage() {
                       Amount{needsAmount && <span className="text-red-400"> *</span>}
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={edit.amount}
-                      onChange={(e) => setEdit(draft.id, { amount: e.target.value })}
+                      onChange={(e) => setEdit(draft.id, { amount: formatAmountInput(e.target.value) })}
                       placeholder={needsAmount ? 'Enter amount' : '0.00'}
                       className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />

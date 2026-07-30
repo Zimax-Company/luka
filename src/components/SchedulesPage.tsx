@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '@/lib/api';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
+import { formatAmountInput, parseAmount } from '@/lib/amount';
 
 type Cadence = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
@@ -135,7 +136,7 @@ export default function SchedulesPage() {
     setForm({
       accountId: t.accountId,
       categoryId: t.categoryId,
-      amount: t.amount == null ? '' : String(t.amount),
+      amount: t.amount == null ? '' : formatAmountInput(String(t.amount)),
       note: t.note ?? '',
       cadence: t.cadence,
       dayOfMonth: String(t.dayOfMonth ?? 1),
@@ -165,7 +166,7 @@ export default function SchedulesPage() {
       const payload = {
         accountId: form.accountId,
         categoryId: form.categoryId,
-        amount: form.amount === '' ? null : Number(form.amount),
+        amount: form.amount.trim() === '' ? null : parseAmount(form.amount),
         note: form.note || undefined,
         cadence: form.cadence,
         dayOfMonth: form.cadence === 'MONTHLY' ? Number(form.dayOfMonth) : undefined,
@@ -456,10 +457,10 @@ export default function SchedulesPage() {
                   <span className="ml-1 text-xs text-muted-foreground/70">blank = ask me</span>
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.amount}
-                  onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: formatAmountInput(e.target.value) }))}
                   placeholder="Leave blank to confirm the amount each time"
                   className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />

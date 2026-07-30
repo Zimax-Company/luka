@@ -5,6 +5,7 @@ import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 import { authFetch } from '@/lib/api';
+import { formatAmountInput, parseAmount } from '@/lib/amount';
 import { PaginationMeta } from '@/lib/pagination';
 
 const PAGE_SIZE = 20;
@@ -392,8 +393,8 @@ export default function EntriesPage() {
 
   // Line-item running total vs the entry amount. Submit is blocked when the
   // items' sum exceeds the entry amount (matches the server-side rule).
-  const entryAmount = parseFloat(formData.amount) || 0;
-  const itemsTotal = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const entryAmount = parseAmount(formData.amount) || 0;
+  const itemsTotal = items.reduce((s, i) => s + (parseAmount(i.amount) || 0), 0);
   const itemsRemaining = entryAmount - itemsTotal;
   const itemsExceed = Math.round(itemsTotal * 100) > Math.round(entryAmount * 100);
 
@@ -450,7 +451,7 @@ export default function EntriesPage() {
       return;
     }
     const note = formData.note.trim();
-    const amount = parseFloat(formData.amount);
+    const amount = parseAmount(formData.amount);
     if (!note && !(amount > 0)) {
       setSuggestions([]);
       return;
@@ -565,7 +566,7 @@ export default function EntriesPage() {
     const cleanedItems = items
       .map((i) => ({
         name: i.name.trim(),
-        amount: parseFloat(i.amount),
+        amount: parseAmount(i.amount),
         categoryItemId: i.categoryItemId ?? null,
       }))
       .filter((i) => i.name && i.amount > 0);
@@ -580,7 +581,7 @@ export default function EntriesPage() {
           body: JSON.stringify({
             fromAccountId: formData.accountId,
             categoryId: formData.categoryId,
-            amount: parseFloat(formData.amount),
+            amount: parseAmount(formData.amount),
             date: formData.date,
             note: formData.note || undefined,
             toHandle: `@${handleTrimmed}`,
@@ -609,7 +610,7 @@ export default function EntriesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          amount: parseFloat(formData.amount),
+          amount: parseAmount(formData.amount),
           items: cleanedItems,
         })
       });
@@ -635,7 +636,7 @@ export default function EntriesPage() {
       date: transaction.date,
       note: transaction.note,
       categoryId: transaction.categoryId,
-      amount: transaction.amount.toString(),
+      amount: formatAmountInput(transaction.amount.toString()),
       toHandle: ''
     });
     setItems([]);
@@ -649,7 +650,7 @@ export default function EntriesPage() {
         setItems(
           json.data.items.map((it: { name: string; amount: number; categoryItemId?: string | null }) => ({
             name: it.name,
-            amount: String(it.amount),
+            amount: formatAmountInput(String(it.amount)),
             categoryItemId: it.categoryItemId ?? null,
           }))
         );
@@ -960,10 +961,10 @@ export default function EntriesPage() {
                       <CoinIcon className="w-4 h-4" /> Amount
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={formData.amount}
-                      onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                      onChange={(e) => setFormData(prev => ({ ...prev, amount: formatAmountInput(e.target.value) }))}
                       className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="0.00 NGN"
                       required
@@ -1079,10 +1080,10 @@ export default function EntriesPage() {
                             ))}
                           </datalist>
                           <input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={item.amount}
-                            onChange={(e) => updateItem(idx, { amount: e.target.value })}
+                            onChange={(e) => updateItem(idx, { amount: formatAmountInput(e.target.value) })}
                             placeholder="0.00"
                             className="w-28 px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
