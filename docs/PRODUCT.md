@@ -62,6 +62,7 @@ exclusively through the [migration framework](#71-database-migrations-auto-run).
 | `accounts` | Money containers. | `userId` (owner), `customerId`, `handle` (unique), `name`, `type`, `currency` |
 | `account_access` | Per-account membership grants. | `userId`, `accountId` (unique pair) |
 | `notifications` | In-app notifications (per recipient). | `recipientId`, `actorName`, `action`, `resource`, `accountId`, `readAt` |
+| `device_tokens` | FCM push tokens per user/device. | `userId`, `token` (unique), `platform` |
 | `categories` | Income/expense buckets, per account. | `accountId`, `name`, `type` (INCOME/EXPENSE) |
 | `category_items` | Reusable item catalog under a category. | `categoryId`, `name` |
 | `entries` | The ledger lines (was `transactions`). | `accountId`, `categoryId`, `date`, `amount`, `note?` |
@@ -137,6 +138,17 @@ Bell icon + unread badge (polled). On any entry create/update/delete, a
 notification fans out to everyone with access to that account (members + admins)
 **except the actor**. Also used for transfer decisions and inbox drafts.
 `/api/notifications`, `/notifications/unread-count`, `POST /notifications` (mark read).
+
+### 5.5b Push notifications (FCM) 🟡
+Backend shipped; mobile wiring pending Firebase credentials. Every in-app
+notification (entry CRUD, postings, inbox drafts from the cron) also sends a
+Firebase Cloud Messaging push via `lib/push.sendPushToUsers` (FCM HTTP v1,
+`google-auth-library`). No-ops until `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL`
+/ `FIREBASE_PRIVATE_KEY` are set on Vercel; dead tokens are pruned. Devices
+register their token via `POST /api/devices`. **Remaining:** add
+`android/app/google-services.json`, install `@react-native-firebase/*`, request
+POST_NOTIFICATIONS, register the token on login, and handle foreground/background
+messages — then rebuild the APK.
 
 ### 5.6 Account access & members ✅
 Per-account membership (see [§4](#4-access--permissions-model)). Admin-only Members
@@ -252,6 +264,7 @@ Auth headers (`x-user-id`, `x-user-email`) required on all except `/auth/login`.
 - **Notifications:** `GET /notifications`, `GET /notifications/unread-count`,
   `POST /notifications`
 - **Onboarding:** `GET /onboarding`, `POST /onboarding/dismiss`
+- **Devices (push):** `POST /devices`, `DELETE /devices`
 - **Billing/audit:** `GET /subscription`, `GET /audit`
 - **Users:** `GET/POST /users`, `GET/PUT/DELETE /users/[id]`
 - **Ops:** `GET /migrate`, `POST /migrate`, `POST /migrate/rollback`,
@@ -320,6 +333,11 @@ When you add or change a feature:
 5. Bump **Doc version** + **Last updated** at the top and add a changelog line below.
 
 ### Changelog
+- **1.1 — 2026-07-30** — Keyboard-avoiding forms + live thousands separators on all
+  amount inputs; "Review Inbox" → "Inbox"; category type filter; account-based
+  monthly-comparison. Added FCM push **backend** (device_tokens, `/api/devices`,
+  `lib/push`, migration 016) fired on every notification — mobile wiring pending
+  Firebase credentials (§5.5b).
 - **1.0 — 2026-07-28** — Initial consolidated PRD + technical reference covering all
   shipped features (core ledger, dashboard/analytics, offline, notifications, access
   control, transfers, category items, onboarding, biometric lock, auto-migration,
