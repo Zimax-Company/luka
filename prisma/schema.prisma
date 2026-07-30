@@ -294,6 +294,19 @@ model DraftEntry {
   @@map("draft_entries")
 }
 
+// FCM device registration tokens for push notifications (one per device/login).
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique @db.VarChar(512)
+  platform  String   @default("android") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId], name: "idx_devicetoken_user")
+  @@map("device_tokens")
+}
+
 // Reusable catalog of items under a category (e.g. Milk under Groceries).
 model CategoryItem {
   id         String   @id @default(cuid())

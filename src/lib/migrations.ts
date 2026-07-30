@@ -920,6 +920,26 @@ export const MIGRATIONS: Migration[] = [
         await prisma.$executeRawUnsafe(`ALTER TABLE customers DROP COLUMN onboarding_dismissed`);
       }
     },
+  },
+  {
+    id: '016_device_tokens',
+    description: 'FCM device registration tokens for push notifications',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS device_tokens (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          user_id VARCHAR(191) NOT NULL,
+          token VARCHAR(512) NOT NULL,
+          platform VARCHAR(20) NOT NULL DEFAULT 'android',
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE KEY uniq_device_token (token),
+          KEY idx_devicetoken_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS device_tokens`);
+    },
   }
 ];
 

@@ -1,5 +1,6 @@
 import { createPrismaClient } from './prismaClient';
 import { getAccountNotificationRecipients } from './access';
+import { sendPushToUsers } from './push';
 import type { Actor } from './actor';
 
 const prisma = createPrismaClient();
@@ -51,6 +52,11 @@ export async function notifyEntryChange(
         summary,
       })),
     });
+    void sendPushToUsers(recipients.map(r => r.id), {
+      title: account?.name ?? 'Luka',
+      body: summary,
+      data: { type: 'entry', accountId },
+    });
   } catch (error) {
     console.error('notifyEntryChange failed:', error);
   }
@@ -84,6 +90,11 @@ export async function notifyTransferCreated(
         summary,
       })),
     });
+    void sendPushToUsers(recipients.map(r => r.id), {
+      title: 'Incoming posting',
+      body: summary,
+      data: { type: 'transfer', transferId: transfer.id },
+    });
   } catch (error) {
     console.error('notifyTransferCreated failed:', error);
   }
@@ -113,6 +124,11 @@ export async function notifyTransferDecided(
         accountName: null,
         summary,
       },
+    });
+    void sendPushToUsers([transfer.senderId], {
+      title: accepted ? 'Posting accepted' : 'Posting rejected',
+      body: summary,
+      data: { type: 'transfer', transferId: transfer.id },
     });
   } catch (error) {
     console.error('notifyTransferDecided failed:', error);

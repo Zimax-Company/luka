@@ -5,6 +5,7 @@ import { draftExists, draftFingerprint } from '@/lib/drafts';
 import { Cadence, lagosToday, nextRun } from '@/lib/schedule';
 import { PrismaEntryService } from '@/services/prismaEntryService';
 import { invalidateCategoryModel } from '@/lib/categorizeStore';
+import { sendPushToUsers } from '@/lib/push';
 
 const prisma = createPrismaClient();
 
@@ -86,6 +87,7 @@ async function run() {
       const recipients = await getAccountNotificationRecipients(null, accountId);
       if (recipients.length === 0) continue;
       const account = await prisma.account.findUnique({ where: { id: accountId }, select: { name: true, customerId: true } });
+      const summary = `${n} scheduled ${n === 1 ? 'entry' : 'entries'} ready to review in ${account?.name ?? 'an account'}`;
       await prisma.notification.createMany({
         data: recipients.map(r => ({
           customerId: account?.customerId ?? null,
@@ -97,8 +99,13 @@ async function run() {
           resourceId: null,
           accountId,
           accountName: account?.name ?? null,
-          summary: `${n} scheduled ${n === 1 ? 'entry' : 'entries'} ready to review in ${account?.name ?? 'an account'}`,
+          summary,
         })),
+      });
+      void sendPushToUsers(recipients.map(r => r.id), {
+        title: 'Inbox',
+        body: summary,
+        data: { type: 'draft', accountId },
       });
     } catch (e) {
       console.error('draft notification failed', e);
