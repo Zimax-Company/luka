@@ -227,7 +227,7 @@ Laravel-style framework in `src/lib/migrations.ts` — an ordered `MIGRATIONS[]`
 `migrations` table. **No manual migrations.** `src/instrumentation.ts` runs all
 pending migrations on each deployment's first server boot (server-global advisory
 lock, `INSERT IGNORE`, `createPrismaClient`). CLI (`migrate.ts` / `npm run migrate:*`)
-and `/api/migrate` (status/run) remain for inspection. Current head: **015**.
+and `/api/migrate` (status/run) remain for inspection. Current head: **018**.
 **To change schema:** edit `schema.prisma`, add the next `NNN_*` migration entry,
 `prisma generate` — it applies automatically on deploy.
 
@@ -333,6 +333,12 @@ When you add or change a feature:
 5. Bump **Doc version** + **Last updated** at the top and add a changelog line below.
 
 ### Changelog
+- **1.2 — 2026-08-02** — Bugfix (couldn't create category): dropped the stale global
+  `categories.unique_name_type` index that migration 005 failed to remove (migration
+  017); backfilled `accounts.customer_id` for accounts orphaned before their owner had
+  a customer (migration 018) and made admin access union customer + owned accounts so
+  `customer_id` drift can't hide an admin's own accounts. FCM push mobile wiring shipped
+  (google-services, RN Firebase, token registration on login).
 - **1.1 — 2026-07-30** — Keyboard-avoiding forms + live thousands separators on all
   amount inputs; "Review Inbox" → "Inbox"; category type filter; account-based
   monthly-comparison. Added FCM push **backend** (device_tokens, `/api/devices`,
