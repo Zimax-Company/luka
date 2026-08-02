@@ -12,19 +12,20 @@ export async function getAccessibleAccountIds(actor: Actor | null): Promise<stri
   if (!actor) return [];
 
   if (actor.role === 'ADMIN') {
-    if (actor.customerId) {
-      const rows = await prisma.account.findMany({
-        where: { customerId: actor.customerId, isActive: true },
-        select: { id: true },
-      });
-      return rows.map(r => r.id);
-    }
-    // Legacy admin without a customer: fall back to accounts they own.
-    const owned = await prisma.account.findMany({
-      where: { userId: actor.id, isActive: true },
+    // Every account in their customer PLUS any they own — the union stays correct
+    // even if an account's customerId drifts from the owner's (e.g. accounts
+    // created before the owner was assigned a customer).
+    const rows = await prisma.account.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          ...(actor.customerId ? [{ customerId: actor.customerId }] : []),
+          { userId: actor.id },
+        ],
+      },
       select: { id: true },
     });
-    return owned.map(a => a.id);
+    return rows.map(r => r.id);
   }
 
   const grants = await prisma.accountAccess.findMany({

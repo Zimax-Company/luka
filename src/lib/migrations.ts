@@ -940,6 +940,39 @@ export const MIGRATIONS: Migration[] = [
     async down(prisma) {
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS device_tokens`);
     },
+  },
+  {
+    id: '017_drop_stale_category_unique',
+    description: 'Drop legacy global unique index categories.unique_name_type (migration 005 dropped the wrong name; it enforced category-name uniqueness across ALL accounts)',
+    async up(prisma) {
+      if (await indexExists(prisma, 'categories', 'unique_name_type')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE categories DROP INDEX unique_name_type`);
+      }
+    },
+    async down(prisma) {
+      // Restoring the legacy index would reintroduce the bug and fail if any
+      // duplicate names exist across accounts, so this is best-effort only.
+      if (!(await indexExists(prisma, 'categories', 'unique_name_type'))) {
+        try {
+          await prisma.$executeRawUnsafe(`ALTER TABLE categories ADD UNIQUE INDEX unique_name_type (name, type)`);
+        } catch {
+          /* duplicates across accounts — leave dropped */
+        }
+      }
+    },
+  },
+  {
+    id: '018_backfill_account_customer_id',
+    description: 'Backfill accounts.customer_id from the owner where NULL (accounts orphaned by being created before the owner had a customer)',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        UPDATE accounts a JOIN users u ON a.user_id = u.id
+        SET a.customer_id = u.customer_id
+        WHERE a.customer_id IS NULL AND u.customer_id IS NOT NULL`);
+    },
+    async down() {
+      /* no-op: cannot restore which rows were previously NULL */
+    },
   }
 ];
 
