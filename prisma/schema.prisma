@@ -105,6 +105,7 @@ model Account {
   userId      String      @map("user_id") // Owner of the account (admin user)
   customerId  String?     @map("customer_id") // Billable account this account belongs to (denormalised from owner)
   handle      String?     @unique @db.VarChar(64) // Globally-unique @handle for transfers (e.g. anyirah)
+  mode        AccountMode @default(PERSONAL) // Drives the app experience: personal tracker vs business P&L
   name        String      @db.VarChar(255)
   description String?     @db.Text
   type        AccountType @default(PERSONAL)
@@ -344,6 +345,13 @@ enum AccountType {
   CHECKING
   CREDIT
   INVESTMENT
+}
+
+// The app experience an account drives. PERSONAL = the income/expense tracker;
+// BUSINESS = the orders/costs/P&L flow.
+enum AccountMode {
+  PERSONAL
+  BUSINESS
 }
 
 enum CategoryType {

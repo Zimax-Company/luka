@@ -973,6 +973,18 @@ export const MIGRATIONS: Migration[] = [
     async down() {
       /* no-op: cannot restore which rows were previously NULL */
     },
+  },
+  {
+    id: '019_account_mode',
+    description: 'Add account mode (PERSONAL|BUSINESS) driving the app experience; existing accounts default to PERSONAL',
+    async up(prisma) {
+      await addColumn(prisma, 'accounts', 'mode', `mode ENUM('PERSONAL','BUSINESS') NOT NULL DEFAULT 'PERSONAL'`);
+    },
+    async down(prisma) {
+      if (await columnExists(prisma, 'accounts', 'mode')) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE accounts DROP COLUMN mode`);
+      }
+    },
   }
 ];
 
