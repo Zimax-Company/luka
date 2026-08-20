@@ -295,6 +295,43 @@ model DraftEntry {
   @@map("draft_entries")
 }
 
+// Business mode: a sale/order (revenue). Lean P&L = orders − costs.
+model Order {
+  id           String   @id @default(cuid())
+  accountId    String   @map("account_id")
+  customerId   String?  @map("customer_id")
+  reference    String?  @db.VarChar(64) // order / invoice number
+  customerName String?  @map("customer_name") @db.VarChar(255)
+  date         DateTime @db.Date
+  amount       Decimal  @db.Decimal(12, 2) // revenue for this order
+  status       String   @default("PAID") @db.VarChar(20) // PAID | PENDING | CANCELLED
+  note         String?  @db.Text
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([accountId, date], name: "idx_order_account_date")
+  @@index([accountId, status], name: "idx_order_account_status")
+  @@map("orders")
+}
+
+// Business mode: a cost / expenditure that reduces profit.
+model Cost {
+  id          String   @id @default(cuid())
+  accountId   String   @map("account_id")
+  customerId  String?  @map("customer_id")
+  category    String?  @db.VarChar(255)
+  note        String?  @db.Text
+  date        DateTime @db.Date
+  amount      Decimal  @db.Decimal(12, 2)
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([accountId, date], name: "idx_cost_account_date")
+  @@map("costs")
+}
+
 // FCM device registration tokens for push notifications (one per device/login).
 model DeviceToken {
   id        String   @id @default(cuid())

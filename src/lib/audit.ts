@@ -4,7 +4,7 @@ import { Actor } from './actor';
 const prisma = createPrismaClient();
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
-export type AuditResource = 'entry' | 'account' | 'category' | 'user' | 'transfer';
+export type AuditResource = 'entry' | 'account' | 'category' | 'user' | 'transfer' | 'order' | 'cost';
 
 // Fire-and-forget audit write. Never throws — auditing must not break the
 // primary request. Actor may be null (unknown caller) → logged as 'system'.

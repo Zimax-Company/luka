@@ -985,6 +985,47 @@ export const MIGRATIONS: Migration[] = [
         await prisma.$executeRawUnsafe(`ALTER TABLE accounts DROP COLUMN mode`);
       }
     },
+  },
+  {
+    id: '020_business_orders_costs',
+    description: 'Business mode: orders (revenue) and costs (expenditure) tables powering the lean P&L',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS orders (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          account_id VARCHAR(191) NOT NULL,
+          customer_id VARCHAR(191) NULL,
+          reference VARCHAR(64) NULL,
+          customer_name VARCHAR(255) NULL,
+          date DATE NOT NULL,
+          amount DECIMAL(12,2) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'PAID',
+          note TEXT NULL,
+          created_by_id VARCHAR(191) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_order_account_date (account_id, date),
+          KEY idx_order_account_status (account_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS costs (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          account_id VARCHAR(191) NOT NULL,
+          customer_id VARCHAR(191) NULL,
+          category VARCHAR(255) NULL,
+          note TEXT NULL,
+          date DATE NOT NULL,
+          amount DECIMAL(12,2) NOT NULL,
+          created_by_id VARCHAR(191) NULL,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          KEY idx_cost_account_date (account_id, date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS orders`);
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS costs`);
+    },
   }
 ];
 
