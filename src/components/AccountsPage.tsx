@@ -1,10 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Account, AccountWithStats, AccountType, CreateAccountRequest, UpdateAccountRequest } from '@/types/account';
+import { Account, AccountWithStats, AccountType, AccountMode, CreateAccountRequest, UpdateAccountRequest } from '@/types/account';
 import { authFetch } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveAccount } from '@/contexts/ActiveAccountContext';
 import AccountMembersModal from '@/components/AccountMembersModal';
+
+// The account "mode" drives the whole app experience: PERSONAL is the finance
+// tracker, BUSINESS is the lean P&L (Orders + Costs) module.
+const ACCOUNT_MODES: { value: AccountMode; label: string; description: string }[] = [
+  { value: 'PERSONAL', label: '👤 Personal', description: 'Personal finance tracker' },
+  { value: 'BUSINESS', label: '🏢 Business', description: 'Orders, costs & profit/loss' },
+];
 
 const ACCOUNT_TYPES = [
   { value: 'PERSONAL' as AccountType, label: '👤 Personal', description: 'Personal finances and expenses' },
@@ -26,15 +34,17 @@ export default function AccountsPage() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState<UpdateAccountRequest>({});
   const { currentUser } = useAuth();
+  const { refreshAccounts } = useActiveAccount();
   const isAdmin = currentUser?.role === 'ADMIN';
   const canEdit = currentUser?.role !== 'VIEWER';
-  
+
   const [newAccount, setNewAccount] = useState<CreateAccountRequest>({
     userId: 'user_admin_001', // Default admin user for now
     name: '',
     handle: '',
     description: '',
     type: 'PERSONAL',
+    mode: 'PERSONAL',
     currency: 'NGN'
   });
 
@@ -88,12 +98,14 @@ export default function AccountsPage() {
       
       if (response.ok) {
         await fetchAccounts();
+        await refreshAccounts();
         setNewAccount({
           userId: 'user_admin_001', // Default admin user for now
           name: '',
           handle: '',
           description: '',
           type: 'PERSONAL',
+          mode: 'PERSONAL',
           currency: 'NGN'
         });
         setShowCreateForm(false);
@@ -111,6 +123,7 @@ export default function AccountsPage() {
       handle: account.handle ?? '',
       description: account.description ?? '',
       type: account.type,
+      mode: account.mode,
       isActive: account.isActive,
     });
     setShowSettings(true);
@@ -129,6 +142,7 @@ export default function AccountsPage() {
 
       if (response.ok) {
         await fetchAccounts();
+        await refreshAccounts();
         setShowSettings(false);
       }
     } catch (error) {
@@ -486,6 +500,37 @@ export default function AccountsPage() {
                 <div>
                   <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 21h18" />
+                      <path d="M5 21V7l7-4 7 4v14" />
+                      <path d="M9 21v-6h6v6" />
+                    </svg>
+                    Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {ACCOUNT_MODES.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() => setSettingsForm({ ...settingsForm, mode: m.value })}
+                        className={`text-left rounded-lg border p-3 transition-colors ${
+                          (settingsForm.mode ?? selectedAccount.mode) === m.value
+                            ? 'border-blue-500 bg-blue-500/10'
+                            : 'border-border bg-input hover:bg-accent'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium text-foreground">{m.label}</span>
+                        <span className="block text-xs text-muted-foreground">{m.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Switching mode changes this account&apos;s experience (tracker vs P&amp;L).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-1.5">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="14" rx="2" />
                       <path d="M3 10h18" />
                     </svg>
@@ -596,6 +641,29 @@ export default function AccountsPage() {
                   />
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Mode *
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {ACCOUNT_MODES.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() => setNewAccount({ ...newAccount, mode: m.value })}
+                        className={`text-left rounded-lg border p-3 transition-colors ${
+                          (newAccount.mode ?? 'PERSONAL') === m.value
+                            ? 'border-blue-500 bg-blue-500/10'
+                            : 'border-border bg-input hover:bg-accent'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium text-foreground">{m.label}</span>
+                        <span className="block text-xs text-muted-foreground">{m.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-muted-foreground mb-1">
                     Account Type *

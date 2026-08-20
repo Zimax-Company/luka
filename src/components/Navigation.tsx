@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { User, UserPermissions } from '@/types/user'
 import { useAuth } from '@/contexts/AuthContext'
+import { useActiveAccount } from '@/contexts/ActiveAccountContext'
 import NotificationBell from '@/components/NotificationBell'
 import { authFetch } from '@/lib/api'
 
@@ -31,6 +32,8 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
   const [isRoot, setIsRoot] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement>(null)
   const { logout, currentUser: authUser, permissions: authPermissions } = useAuth()
+  const { activeAccount, switchAccount } = useActiveAccount()
+  const isBusiness = activeAccount?.mode === 'BUSINESS'
 
   // Prefer explicitly-passed props but fall back to the auth context so every
   // page renders an identical, permission-aware nav (the dashboard is the reference).
@@ -39,15 +42,23 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
   const role = currentUser?.role
 
   // Primary items stay lean; everything else collapses into the "More" menu,
-  // mirroring the mobile app's More menu.
-  const primaryNavigation: NavItem[] = [
+  // mirroring the mobile app's More menu. The active account's mode drives which
+  // set of items is shown: BUSINESS surfaces the lean P&L module (Dashboard,
+  // Orders, Costs); PERSONAL keeps the personal finance tracker.
+  const personalPrimary: NavItem[] = [
     { name: 'Dashboard', href: '/', icon: '🏠', permission: null },
     { name: 'Entries', href: '/entries', icon: '💰', permission: 'canCreateTransactions' },
     { name: 'Inbox', href: '/inbox', icon: '📥', permission: null },
     { name: 'Categories', href: '/categories', icon: '📁', permission: null },
   ];
 
-  const moreNavigation: NavItem[] = [
+  const businessPrimary: NavItem[] = [
+    { name: 'Dashboard', href: '/', icon: '🏠', permission: null },
+    { name: 'Orders', href: '/orders', icon: '🧾', permission: null },
+    { name: 'Costs', href: '/costs', icon: '💸', permission: null },
+  ];
+
+  const personalMore: NavItem[] = [
     { name: 'Accounts', href: '/accounts', icon: '🏦', permission: 'canEditAccounts' },
     { name: 'Postings', href: '/transfers', icon: '🔄', permission: null },
     { name: 'Schedules', href: '/schedules', icon: '🔁', permission: null },
@@ -57,6 +68,17 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
     { name: 'Settings', href: '/settings', icon: '⚙️', permission: null },
     { name: 'Audit', href: '/audit', icon: '📋', permission: null, adminOnly: true },
   ];
+
+  const businessMore: NavItem[] = [
+    { name: 'Accounts', href: '/accounts', icon: '🏦', permission: 'canEditAccounts' },
+    { name: 'Subscription', href: '/subscription', icon: '💳', permission: null, ownerOnly: true },
+    { name: 'Users', href: '/users', icon: '👥', permission: 'canManageUsers' },
+    { name: 'Settings', href: '/settings', icon: '⚙️', permission: null },
+    { name: 'Audit', href: '/audit', icon: '📋', permission: null, adminOnly: true },
+  ];
+
+  const primaryNavigation = isBusiness ? businessPrimary : personalPrimary;
+  const moreNavigation = isBusiness ? businessMore : personalMore;
 
   // Filter navigation based on permissions / role.
   const canShow = (item: NavItem) => {
@@ -227,6 +249,18 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                             {badgeFor(item.href, 'ml-auto')}
                           </Link>
                         ))}
+                        <div className="my-1 border-t border-border" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoreMenuOpen(false)
+                            switchAccount()
+                          }}
+                          className="flex w-full items-center px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
+                          <span className="mr-2">🔀</span>
+                          Switch account
+                        </button>
                       </div>
                     )}
                   </div>
@@ -297,6 +331,17 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                   {badgeFor(item.href, 'ml-auto')}
                 </Link>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  closeMobileMenu()
+                  switchAccount()
+                }}
+                className="flex w-full items-center px-3 py-2 rounded-md text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                <span className="mr-2">🔀</span>
+                Switch account
+              </button>
             </div>
 
             {/* Logout in Mobile Menu */}
