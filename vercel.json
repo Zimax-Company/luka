@@ -28,7 +28,7 @@
     },
     {
       "path": "/api/cron/daily-reminder",
-      "schedule": "*/30 9-19 * * *"
+      "schedule": "0 19 * * *"
     }
   ]
 }
