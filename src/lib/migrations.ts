@@ -1026,6 +1026,20 @@ export const MIGRATIONS: Migration[] = [
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS orders`);
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS costs`);
     },
+  },
+  {
+    id: '021_reminder_log',
+    description: 'Daily reminder push bookkeeping — one row per Lagos day a reminder was sent (exactly-once guard)',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS reminder_log (
+          date DATE NOT NULL PRIMARY KEY,
+          sent_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS reminder_log`);
+    },
   }
 ];
 

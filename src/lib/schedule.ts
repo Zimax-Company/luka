@@ -12,6 +12,12 @@ export function lagosToday(now: Date = new Date()): Date {
   return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
 }
 
+// Minutes elapsed since midnight in Lagos (0–1439). e.g. 10:00 → 600, 20:00 → 1200.
+export function lagosMinutesOfDay(now: Date = new Date()): number {
+  const shifted = new Date(now.getTime() + LAGOS_OFFSET_MS);
+  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
+}
+
 export function toDateOnly(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }

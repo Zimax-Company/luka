@@ -332,6 +332,15 @@ model Cost {
   @@map("costs")
 }
 
+// One row per day a "record your income/expenses" reminder push was sent —
+// guards the daily reminder cron to exactly one send per Lagos calendar day.
+model ReminderLog {
+  date   DateTime @id @db.Date
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  @@map("reminder_log")
+}
+
 // FCM device registration tokens for push notifications (one per device/login).
 model DeviceToken {
   id        String   @id @default(cuid())
