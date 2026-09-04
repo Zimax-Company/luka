@@ -1040,6 +1040,26 @@ export const MIGRATIONS: Migration[] = [
     async down(prisma) {
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS reminder_log`);
     },
+  },
+  {
+    id: '022_backoffice_users',
+    description: 'Platform back-office admin accounts (multi-user, DB-backed; replaces the single env password)',
+    async up(prisma) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS backoffice_users (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          email VARCHAR(255) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE KEY uniq_backoffice_email (email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    },
+    async down(prisma) {
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS backoffice_users`);
+    },
   }
 ];
 

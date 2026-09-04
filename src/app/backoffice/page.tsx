@@ -81,12 +81,20 @@ export default function BackofficeDashboard() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
           <div className="font-bold text-lg">🛡️ Luka Back Office</div>
-          <button
-            onClick={logout}
-            className="text-sm text-muted-foreground hover:text-foreground rounded-md px-3 py-2"
-          >
-            🚪 Logout
-          </button>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/backoffice/users"
+              className="text-sm text-muted-foreground hover:text-foreground rounded-md px-3 py-2"
+            >
+              👤 Admins
+            </Link>
+            <button
+              onClick={logout}
+              className="text-sm text-muted-foreground hover:text-foreground rounded-md px-3 py-2"
+            >
+              🚪 Logout
+            </button>
+          </div>
         </div>
       </header>
 
