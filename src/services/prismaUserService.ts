@@ -254,6 +254,56 @@ export class PrismaUserService {
     }));
   }
 
+  // Get all users belonging to a billable account (tenant). This is the correct
+  // scope for the "Manage users" screen — everyone sharing the customerId,
+  // regardless of which admin invited them. Optionally filter by role.
+  static async getByCustomerId(customerId: string, role?: UserRole): Promise<User[]> {
+    this.logDatabaseOperation(
+      'SELECT * FROM users WHERE customer_id = ? AND is_active = TRUE',
+      `customerId=${customerId}${role ? `, role=${role}` : ''}`,
+    );
+
+    const result = await prisma.user.findMany({
+      where: { customerId, isActive: true, ...(role ? { role } : {}) },
+      orderBy: { name: 'asc' },
+    });
+
+    return result.map((user: any) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      isActive: user.isActive,
+      adminId: user.adminId || undefined,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    }));
+  }
+
+  // Users visible to an actor who has no customerId (legacy accounts): just
+  // themselves plus anyone they directly invited.
+  static async getSelfAndMembers(actorId: string, role?: UserRole): Promise<User[]> {
+    const result = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        ...(role ? { role } : {}),
+        OR: [{ id: actorId }, { adminId: actorId }],
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return result.map((user: any) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      isActive: user.isActive,
+      adminId: user.adminId || undefined,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    }));
+  }
+
   // Check user permissions based on role
   static getPermissions(role: UserRole): UserPermissions {
     switch (role) {

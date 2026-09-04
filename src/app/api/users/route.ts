@@ -4,26 +4,30 @@ import { CreateUserRequest } from '@/types/user';
 import { getActor } from '@/lib/actor';
 import { recordAudit } from '@/lib/audit';
 
-// GET /api/users - Get all users or filter by role
+// GET /api/users - Users in the caller's billable account (tenant).
+// Always scoped to the actor's customer so one customer can never see another
+// customer's users. The `role` query param filters within that scope; the
+// legacy `adminId` param is ignored (scoping is enforced by customer, not by a
+// client-supplied id).
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role');
-    const adminId = searchParams.get('adminId');
+    const role = searchParams.get('role') as any;
 
-    console.log('👥 Getting users...');
+    console.log('👥 Getting users (customer-scoped)...');
 
-    let users;
-    if (role) {
-      users = await PrismaUserService.getByRole(role as any);
-    } else if (adminId) {
-      users = await PrismaUserService.getMembersByAdminId(adminId);
-    } else {
-      users = await PrismaUserService.getAll();
+    const actor = await getActor(request);
+    if (!actor) {
+      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    // Only admins manage users; others get just themselves.
+    const users = actor.customerId
+      ? await PrismaUserService.getByCustomerId(actor.customerId, role || undefined)
+      : await PrismaUserService.getSelfAndMembers(actor.id, role || undefined);
+
+    return NextResponse.json({
+      success: true,
       data: users,
       message: `Retrieved ${users.length} users`,
       source: 'database'
