@@ -5,13 +5,11 @@ import { NextRequest } from 'next/server';
 // grants platform owners cross-tenant visibility (manage all customers).
 //
 // Admin accounts live in the `backoffice_users` table and are managed from the
-// back office UI. The env credentials below are a FIRST-RUN BOOTSTRAP ONLY —
-// they let you sign in while `backoffice_users` is empty so you can create real
-// accounts; once any active back-office user exists, the env login is ignored.
-//   BACKOFFICE_PASSWORD  (bootstrap password)
-//   BACKOFFICE_EMAIL     (bootstrap email; defaults to "owner")
-//   BACKOFFICE_SECRET    (HMAC key for the session cookie; falls back to
-//                         BACKOFFICE_PASSWORD)
+// back office UI. There is a FIRST-RUN BOOTSTRAP: while the table has no active
+// admins, a default hardcoded login is accepted so you can sign in and create
+// real accounts. As soon as one active admin exists, the default stops working.
+// The default password can be overridden with BACKOFFICE_PASSWORD if you want a
+// non-public bootstrap secret; BACKOFFICE_SECRET overrides the cookie HMAC key.
 // The session is a signed, expiring HttpOnly cookie carrying the subject (the
 // back-office user id, or "bootstrap") — no server-side session store.
 
@@ -19,23 +17,32 @@ export const BO_COOKIE = 'bo_session';
 export const BO_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 export const BOOTSTRAP_SUB = 'bootstrap';
 
+// Default first-run bootstrap credentials (only valid while there are no admins).
+export const DEFAULT_BOOTSTRAP_EMAIL = 'admin@luka.app';
+const DEFAULT_BOOTSTRAP_PASSWORD = 'luka-admin';
+
 function secret(): string {
   return process.env.BACKOFFICE_SECRET || process.env.BACKOFFICE_PASSWORD || 'luka-backoffice';
 }
 
-// --- Env bootstrap (only usable while there are no back-office users) ---
-export function envBootstrapConfigured(): boolean {
-  return !!process.env.BACKOFFICE_PASSWORD;
+// --- Bootstrap (only usable while there are no active back-office users) ---
+export function bootstrapEmail(): string {
+  return process.env.BACKOFFICE_EMAIL || DEFAULT_BOOTSTRAP_EMAIL;
 }
-export function envBootstrapEmail(): string {
-  return process.env.BACKOFFICE_EMAIL || 'owner';
+function bootstrapPassword(): string {
+  return process.env.BACKOFFICE_PASSWORD || DEFAULT_BOOTSTRAP_PASSWORD;
 }
-export function checkEnvBootstrap(email: string | undefined, password: string | undefined): boolean {
-  const pw = process.env.BACKOFFICE_PASSWORD;
-  if (!pw || !password) return false;
-  const expectedEmail = process.env.BACKOFFICE_EMAIL;
-  if (expectedEmail && (email ?? '').toLowerCase() !== expectedEmail.toLowerCase()) return false;
-  return timingSafeEqualStr(password, pw);
+// Accept the bootstrap login by password (the email is only used for display).
+export function checkBootstrap(password: string | undefined): boolean {
+  if (!password) return false;
+  return timingSafeEqualStr(password, bootstrapPassword());
+}
+// The hardcoded default credentials, surfaced on the login page during first-run
+// so the operator knows how to get in. Null when a custom BACKOFFICE_PASSWORD is
+// set (don't leak a secret the operator chose).
+export function defaultBootstrapCredentials(): { email: string; password: string } | null {
+  if (process.env.BACKOFFICE_PASSWORD) return null;
+  return { email: bootstrapEmail(), password: DEFAULT_BOOTSTRAP_PASSWORD };
 }
 
 // --- Password hashing (salted scrypt: "saltHex:hashHex") ---

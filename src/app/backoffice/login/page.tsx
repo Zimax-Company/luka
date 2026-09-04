@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function BackofficeLogin() {
@@ -9,6 +9,24 @@ export default function BackofficeLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bootstrap, setBootstrap] = useState<{ email: string; password: string } | null>(null);
+
+  // First run (no admins yet): surface the default credentials so the operator
+  // can get in and create real accounts. Once an admin exists, this disappears.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/backoffice/status');
+        const json = await res.json().catch(() => ({}));
+        if (json?.bootstrap && json?.defaults) {
+          setBootstrap(json.defaults);
+          setEmail(prev => prev || json.defaults.email);
+        }
+      } catch {
+        // ignore — the form still works
+      }
+    })();
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +58,15 @@ export default function BackofficeLogin() {
           <div className="text-2xl font-bold">🛡️ Luka Back Office</div>
           <p className="text-sm text-muted-foreground mt-1">Platform administration</p>
         </div>
+
+        {bootstrap ? (
+          <div className="mb-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm">
+            First run — sign in with the default admin, then create real accounts:
+            <div className="mt-2 font-mono text-xs">
+              {bootstrap.email} / {bootstrap.password}
+            </div>
+          </div>
+        ) : null}
 
         <form onSubmit={submit} className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h1 className="text-lg font-semibold mb-4">Sign in</h1>

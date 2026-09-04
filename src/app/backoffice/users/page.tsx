@@ -111,8 +111,8 @@ export default function BackofficeAdmins() {
 
         {me?.bootstrap ? (
           <div className="mb-6 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm">
-            You’re signed in with the bootstrap password. Create a real admin below — once one exists,
-            the <code>BACKOFFICE_PASSWORD</code> env login stops working.
+            You’re signed in with the default bootstrap login. Create a real admin below — once one
+            exists, the default credentials stop working.
           </div>
         ) : null}
 

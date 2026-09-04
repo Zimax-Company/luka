@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrismaClient } from '@/lib/prismaClient';
-import { BOOTSTRAP_SUB, getBackofficeSub, envBootstrapEmail } from '@/lib/backoffice';
+import { BOOTSTRAP_SUB, getBackofficeSub, bootstrapEmail } from '@/lib/backoffice';
 
 const prisma = createPrismaClient();
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (sub === BOOTSTRAP_SUB) {
     return NextResponse.json({
       success: true,
-      user: { id: BOOTSTRAP_SUB, name: 'Owner (bootstrap)', email: envBootstrapEmail(), bootstrap: true },
+      user: { id: BOOTSTRAP_SUB, name: 'Owner (bootstrap)', email: bootstrapEmail(), bootstrap: true },
     });
   }
 

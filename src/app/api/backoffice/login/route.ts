@@ -4,9 +4,8 @@ import {
   BO_COOKIE,
   BO_TTL_MS,
   BOOTSTRAP_SUB,
-  checkEnvBootstrap,
+  checkBootstrap,
   createSessionToken,
-  envBootstrapConfigured,
   verifyPassword,
 } from '@/lib/backoffice';
 
@@ -25,8 +24,8 @@ function setSession(sub: string) {
 }
 
 // POST /api/backoffice/login — { email, password }
-// Authenticates against backoffice_users. While that table is empty, the env
-// bootstrap credentials are accepted so the first real account can be created.
+// Authenticates against backoffice_users. While that table has no active admins,
+// the default bootstrap login is accepted so the first real account can be made.
 export async function POST(request: NextRequest) {
   let email: string | undefined;
   let password: string | undefined;
@@ -52,18 +51,8 @@ export async function POST(request: NextRequest) {
       return setSession(user.id);
     }
 
-    // Bootstrap path: no back-office users yet.
-    if (!envBootstrapConfigured()) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'Back office is not set up. Set BACKOFFICE_PASSWORD once to bootstrap, then create admin users.',
-        },
-        { status: 503 },
-      );
-    }
-    if (!checkEnvBootstrap(email, password)) {
+    // Bootstrap path: no admins yet — accept the default (or overridden) password.
+    if (!checkBootstrap(password)) {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
     return setSession(BOOTSTRAP_SUB);
