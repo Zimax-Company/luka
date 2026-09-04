@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const ACTIVE_ACCOUNT_KEY = 'luka.activeAccountId';
 const LAST_ACCOUNT_KEY = 'luka.lastAccountId';
+const CHOSEN_KEY = 'luka.accountChosen';
 
 interface ActiveAccountContextValue {
   activeAccountId: string | null;
@@ -48,8 +49,17 @@ function readStored(key: string): string | null {
   }
 }
 
+function removeStored(key: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 export function ActiveAccountProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [activeAccountId, setActiveAccountIdState] = useState<string | null>(null);
   const [lastAccountId, setLastAccountId] = useState<string | null>(null);
   const [chosen, setChosen] = useState(false);
@@ -60,8 +70,30 @@ export function ActiveAccountProvider({ children }: { children: React.ReactNode 
   // Restore the last-used account id (for pre-highlighting the chooser).
   useEffect(() => {
     setLastAccountId(readStored(LAST_ACCOUNT_KEY) ?? readStored(ACTIVE_ACCOUNT_KEY));
-    setIsReady(true);
   }, []);
+
+  // Restore the active account + chosen flag once auth resolves. This keeps the
+  // active account's mode (personal vs business) stable across page navigations
+  // and refreshes — without it, loading a sub-route like /orders would resolve
+  // no active account and the nav would fall back to the personal menu.
+  useEffect(() => {
+    if (authLoading) return;
+    if (isAuthenticated) {
+      const stored = readStored(ACTIVE_ACCOUNT_KEY);
+      if (stored) {
+        setActiveAccountIdState(stored);
+        if (readStored(CHOSEN_KEY) === '1') setChosen(true);
+      }
+    } else {
+      // Real sign-out (after auth has resolved): drop the selection and its
+      // persisted markers so the chooser reappears on next sign-in.
+      setActiveAccountIdState(null);
+      setChosen(false);
+      removeStored(ACTIVE_ACCOUNT_KEY);
+      removeStored(CHOSEN_KEY);
+    }
+    setIsReady(true);
+  }, [isAuthenticated, authLoading]);
 
   const refreshAccounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -87,14 +119,6 @@ export function ActiveAccountProvider({ children }: { children: React.ReactNode 
     }
   }, [isAuthenticated, refreshAccounts]);
 
-  // Sign-out returns to the chooser and drops the active selection.
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setActiveAccountIdState(null);
-      setChosen(false);
-    }
-  }, [isAuthenticated]);
-
   const setActiveAccountId = useCallback((id: string | null) => {
     setActiveAccountIdState(id);
     if (id) {
@@ -112,12 +136,20 @@ export function ActiveAccountProvider({ children }: { children: React.ReactNode 
     (id: string) => {
       setActiveAccountId(id);
       setChosen(true);
+      try {
+        window.localStorage.setItem(CHOSEN_KEY, '1');
+      } catch {
+        // Ignore storage failures; state still updates for this session.
+      }
     },
     [setActiveAccountId],
   );
 
+  // Return to the chooser. Clear the persisted "chosen" marker so a refresh
+  // keeps showing the chooser (the last account id is kept for pre-highlighting).
   const switchAccount = useCallback(() => {
     setChosen(false);
+    removeStored(CHOSEN_KEY);
   }, []);
 
   const activeAccount = useMemo(
