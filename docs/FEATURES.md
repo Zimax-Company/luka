@@ -69,7 +69,7 @@ Grouped into epics. **P** = platform.
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
 | 4 | On expense entry, **category select → 3 amount + 3 note suggestions** | backend, mobile, web | `GET /api/entries/suggest-details?accountId=&categoryId=` → top 3 most-used amounts + notes. Chips under the amount/note fields (mobile TransactionFormScreen + web EntriesPage). | ✅ Done (shipped) |
-| 1a | Quick-add polish: **amount-first keypad** + **recent-category chips** | mobile | Reorder form to amount-first with a large numeric entry; show recent categories as quick chips above the picker. | ⬜ Next |
+| 1a | Quick-add polish: **amount-first** + **recent-category chips** | mobile | Transaction form now leads with the Amount field (autofocus) and shows quick-pick category chips above the picker. (Full custom on-screen keypad = future.) | ✅ Done |
 | 1b | **Home-screen widget** + **add-from-notification** | mobile (native) | Android App Widget (Kotlin, `xml/` provider + layout) opening a quick-add deep link; a persistent/ongoing notification with an "Add" action. Requires native work + device testing — separate track. | ⬜ Next (native track) |
 
 ### EPIC E — Reports & analytics
@@ -82,7 +82,7 @@ Grouped into epics. **P** = platform.
 ### EPIC F — Business cost categories
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 9 | Business **Cost** should have a **category dropdown** (like personal), migrating existing free-text | backend, mobile, web | Reuse the `Category` model (`type=EXPENSE`, scoped to the business account). Add `Cost.categoryId`. **Migration** creates a Category per distinct existing `Cost.category` string per account and backfills `categoryId`; keep the old `category` string for one release (nullable) then drop later. Cost form uses the category dropdown + optional new-category create. | ⬜ Planned |
+| 9 | Business **Cost** should have a **category dropdown** (like personal), migrating existing free-text | backend, mobile, web | Done: reuse EXPENSE `Category`; `Cost.categoryId` + migration 023 (create categories from distinct labels per account + backfill). APIs resolve by id or find-or-create by name; return categoryId + categoryName. Cost forms (mobile + web) use a category dropdown with "+ New category". Legacy `category` kept for back-compat. | ✅ Done (shipped) |
 
 ---
 
