@@ -1060,6 +1060,46 @@ export const MIGRATIONS: Migration[] = [
     async down(prisma) {
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS backoffice_users`);
     },
+  },
+  {
+    id: '023_cost_category_relation',
+    description: 'Give business Costs a category relationship: add costs.category_id, create an EXPENSE Category per distinct existing free-text label per account, and backfill the link',
+    async up(prisma) {
+      // 1) New nullable FK column + index.
+      await addColumn(prisma, 'costs', 'category_id', 'category_id VARCHAR(191) NULL');
+      await addIndex(prisma, 'costs', 'idx_cost_category', 'INDEX idx_cost_category (category_id)');
+
+      // 2) Create a Category (type EXPENSE) for every distinct (account, label)
+      //    that doesn't already have one. UUID() ids are fine — the column is a
+      //    plain string PK.
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO categories (id, account_id, name, type, created_at, updated_at)
+        SELECT UUID(), d.account_id, d.category, 'EXPENSE', NOW(3), NOW(3)
+        FROM (
+          SELECT DISTINCT account_id, category
+          FROM costs
+          WHERE category IS NOT NULL AND category <> ''
+        ) d
+        LEFT JOIN categories c
+          ON c.account_id = d.account_id AND c.name = d.category AND c.type = 'EXPENSE'
+        WHERE c.id IS NULL`);
+
+      // 3) Link each cost to its category.
+      await prisma.$executeRawUnsafe(`
+        UPDATE costs co
+        JOIN categories c
+          ON c.account_id = co.account_id AND c.name = co.category AND c.type = 'EXPENSE'
+        SET co.category_id = c.id
+        WHERE co.category IS NOT NULL AND co.category <> '' AND co.category_id IS NULL`);
+    },
+    async down(prisma) {
+      if (await columnExists(prisma, 'costs', 'category_id')) {
+        if (await indexExists(prisma, 'costs', 'idx_cost_category')) {
+          await prisma.$executeRawUnsafe(`ALTER TABLE costs DROP INDEX idx_cost_category`);
+        }
+        await prisma.$executeRawUnsafe(`ALTER TABLE costs DROP COLUMN category_id`);
+      }
+    },
   }
 ];
 

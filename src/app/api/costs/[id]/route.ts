@@ -4,14 +4,14 @@ import { getActor } from '@/lib/actor';
 import { canAccessAccount } from '@/lib/access';
 import { recordAudit } from '@/lib/audit';
 import { UpdateCostRequest } from '@/types/business';
-import { mapCost } from '../route';
+import { mapCost, resolveCostCategory } from '../route';
 
 const prisma = createPrismaClient();
 
 async function loadAuthorized(request: NextRequest, id: string) {
   const actor = await getActor(request);
   if (!actor) return { error: NextResponse.json({ success: false, error: 'Not identified' }, { status: 401 }) };
-  const cost = await prisma.cost.findUnique({ where: { id } });
+  const cost = await prisma.cost.findUnique({ where: { id }, include: { categoryRef: { select: { name: true } } } });
   if (!cost) return { error: NextResponse.json({ success: false, error: 'Cost not found' }, { status: 404 }) };
   if (!(await canAccessAccount(actor, cost.accountId))) {
     return { error: NextResponse.json({ success: false, error: 'No access to this cost' }, { status: 403 }) };
@@ -44,10 +44,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data: Record<string, unknown> = {};
     if (body.amount !== undefined) data.amount = body.amount;
     if (body.date !== undefined) data.date = new Date(body.date);
-    if (body.category !== undefined) data.category = body.category;
     if (body.note !== undefined) data.note = body.note;
+    // Re-resolve the category when either the id or the name is supplied.
+    if (body.categoryId !== undefined || body.category !== undefined) {
+      const resolved = await resolveCostCategory(cost!.accountId, body.categoryId, body.category);
+      data.categoryId = resolved.categoryId;
+      data.category = resolved.category;
+    }
 
-    const updated = await prisma.cost.update({ where: { id: cost!.id }, data });
+    const updated = await prisma.cost.update({
+      where: { id: cost!.id },
+      data,
+      include: { categoryRef: { select: { name: true } } },
+    });
     recordAudit(actor!, 'UPDATE', 'cost', updated.id, `Cost updated`);
     return NextResponse.json({ success: true, data: mapCost(updated) });
   } catch (e) {

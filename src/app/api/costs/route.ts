@@ -7,10 +7,11 @@ import { CreateCostRequest } from '@/types/business';
 
 const prisma = createPrismaClient();
 
-export function mapCost(c: {
+type CostRow = {
   id: string;
   accountId: string;
   customerId: string | null;
+  categoryId: string | null;
   category: string | null;
   note: string | null;
   date: Date;
@@ -18,11 +19,17 @@ export function mapCost(c: {
   createdById: string | null;
   createdAt: Date;
   updatedAt: Date;
-}) {
+  categoryRef?: { name: string } | null;
+};
+
+export function mapCost(c: CostRow) {
   return {
     id: c.id,
     accountId: c.accountId,
     customerId: c.customerId,
+    categoryId: c.categoryId,
+    // Prefer the related category's name; fall back to the legacy free-text label.
+    categoryName: c.categoryRef?.name ?? c.category ?? null,
     category: c.category,
     note: c.note,
     date: c.date.toISOString().slice(0, 10),
@@ -31,6 +38,32 @@ export function mapCost(c: {
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
+}
+
+// Resolve a cost's category: prefer an explicit categoryId (validated against the
+// account); otherwise find-or-create an EXPENSE Category from a provided name so
+// business costs build the same category relationship as personal entries.
+export async function resolveCostCategory(
+  accountId: string,
+  categoryId?: string | null,
+  categoryName?: string | null,
+): Promise<{ categoryId: string | null; category: string | null }> {
+  if (categoryId) {
+    const c = await prisma.category.findFirst({
+      where: { id: categoryId, accountId },
+      select: { id: true, name: true },
+    });
+    if (c) return { categoryId: c.id, category: c.name };
+  }
+  const name = (categoryName ?? '').trim();
+  if (!name) return { categoryId: null, category: null };
+  const cat = await prisma.category.upsert({
+    where: { unique_account_name_type: { accountId, name, type: 'EXPENSE' } },
+    update: {},
+    create: { accountId, name, type: 'EXPENSE' },
+    select: { id: true, name: true },
+  });
+  return { categoryId: cat.id, category: cat.name };
 }
 
 // GET /api/costs?accountId=&startDate=&endDate=&search=
@@ -52,12 +85,19 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = { accountId: { in: scopeIds } };
     if (startDate && endDate) where.date = { gte: new Date(startDate), lte: new Date(endDate) };
 
-    let costs = await prisma.cost.findMany({ where, orderBy: { date: 'desc' }, take: 500 });
+    let costs = await prisma.cost.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      take: 500,
+      include: { categoryRef: { select: { name: true } } },
+    });
 
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       costs = costs.filter(
-        c => (c.category ?? '').toLowerCase().includes(q) || (c.note ?? '').toLowerCase().includes(q),
+        c =>
+          (c.categoryRef?.name ?? c.category ?? '').toLowerCase().includes(q) ||
+          (c.note ?? '').toLowerCase().includes(q),
       );
     }
 
@@ -92,19 +132,23 @@ export async function POST(request: NextRequest) {
       select: { customerId: true },
     });
 
+    const { categoryId, category } = await resolveCostCategory(body.accountId, body.categoryId, body.category);
+
     const cost = await prisma.cost.create({
       data: {
         accountId: body.accountId,
         customerId: account?.customerId ?? actor.customerId ?? null,
-        category: body.category ?? null,
+        categoryId,
+        category,
         note: body.note ?? null,
         date: new Date(body.date),
         amount: body.amount,
         createdById: actor.id,
       },
+      include: { categoryRef: { select: { name: true } } },
     });
 
-    recordAudit(actor, 'CREATE', 'cost', cost.id, `Cost ${Number(cost.amount)} ${cost.category ?? ''}`.trim());
+    recordAudit(actor, 'CREATE', 'cost', cost.id, `Cost ${Number(cost.amount)} ${category ?? ''}`.trim());
 
     return NextResponse.json({ success: true, data: mapCost(cost) }, { status: 201 });
   } catch (error) {

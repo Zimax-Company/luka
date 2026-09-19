@@ -23,8 +23,12 @@ export default function CostsPage() {
 
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayIso());
-  const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [newCategory, setNewCategory] = useState('');
   const [note, setNote] = useState('');
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string }[]>([]);
+  const expenseCategories = categories.filter((c) => c.type === 'EXPENSE');
+  const addingNew = categoryId === '__new__' || expenseCategories.length === 0;
 
   const currency = activeAccount?.currency || 'NGN';
   const formatCurrency = useCallback(
@@ -59,10 +63,33 @@ export default function CostsPage() {
     fetchCosts();
   }, [fetchCosts]);
 
+  // Load this account's EXPENSE categories to offer as the cost category dropdown.
+  useEffect(() => {
+    if (!activeAccountId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/categories');
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json?.data)) {
+          setCategories(
+            json.data.filter((c: { accountId: string }) => c.accountId === activeAccountId),
+          );
+        }
+      } catch {
+        // Non-critical: dropdown falls back to free text.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAccountId]);
+
   const resetForm = () => {
     setAmount('');
     setDate(todayIso());
-    setCategory('');
+    setCategoryId('');
+    setNewCategory('');
     setNote('');
   };
 
@@ -74,7 +101,10 @@ export default function CostsPage() {
         accountId: activeAccountId,
         amount: parseAmount(amount),
         date,
-        category: category.trim() || null,
+        // A typed new-category name upserts server-side; otherwise use the picked id.
+        ...(addingNew
+          ? { category: newCategory.trim() || null }
+          : { categoryId: categoryId || null }),
         note: note.trim() || null,
       };
       const res = await authFetch('/api/costs', {
@@ -168,12 +198,27 @@ export default function CostsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
-              <input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Optional (e.g. Supplies)"
-                className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {expenseCategories.length > 0 ? (
+                <select
+                  value={addingNew ? '__new__' : categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Choose category…</option>
+                  {expenseCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                  <option value="__new__">＋ New category</option>
+                </select>
+              ) : null}
+              {addingNew ? (
+                <input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="New category (e.g. Supplies, Rent)"
+                  className={`w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 ${expenseCategories.length > 0 ? 'mt-2' : ''}`}
+                />
+              ) : null}
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1">Note</label>
@@ -229,7 +274,7 @@ export default function CostsPage() {
                 {costs.map((cost) => (
                   <tr key={cost.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                     <td className="px-4 py-3 text-foreground whitespace-nowrap">{formatDate(cost.date)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{cost.category || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{cost.categoryName || cost.category || '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{cost.note || '—'}</td>
                     <td className="px-4 py-3 text-right font-medium text-red-500 whitespace-nowrap">
                       {formatCurrency(cost.amount)}

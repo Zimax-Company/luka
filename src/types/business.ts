@@ -40,7 +40,9 @@ export interface Cost {
   id: string;
   accountId: string;
   customerId: string | null;
-  category: string | null;
+  categoryId: string | null;
+  categoryName: string | null; // resolved from the category relation (falls back to legacy label)
+  category: string | null; // legacy free-text label
   note: string | null;
   date: string;
   amount: number;
@@ -53,13 +55,15 @@ export interface CreateCostRequest {
   accountId: string;
   amount: number;
   date: string;
-  category?: string | null;
+  categoryId?: string | null; // preferred
+  category?: string | null; // or a name to find-or-create a category
   note?: string | null;
 }
 
 export interface UpdateCostRequest {
   amount?: number;
   date?: string;
+  categoryId?: string | null;
   category?: string | null;
   note?: string | null;
 }
