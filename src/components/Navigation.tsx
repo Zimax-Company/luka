@@ -249,18 +249,6 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
                             {badgeFor(item.href, 'ml-auto')}
                           </Link>
                         ))}
-                        <div className="my-1 border-t border-border" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMoreMenuOpen(false)
-                            switchAccount()
-                          }}
-                          className="flex w-full items-center px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        >
-                          <span className="mr-2">🔀</span>
-                          Switch account
-                        </button>
                       </div>
                     )}
                   </div>
@@ -273,6 +261,19 @@ export default function Navigation({ currentUser: currentUserProp, permissions: 
           {currentUser && (
             <div className="hidden md:block">
               <div className="ml-4 flex items-center md:ml-6">
+                {/* Central account switcher */}
+                {activeAccount && (
+                  <button
+                    type="button"
+                    onClick={switchAccount}
+                    title="Switch account"
+                    className="mr-4 flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+                  >
+                    <span>{isBusiness ? '🏢' : '👤'}</span>
+                    <span className="max-w-[10rem] truncate font-medium">{activeAccount.name}</span>
+                    <span aria-hidden="true">⇅</span>
+                  </button>
+                )}
                 <div className="mr-4">
                   <NotificationBell />
                 </div>
