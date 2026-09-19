@@ -12,20 +12,35 @@ export class PrismaAccountService {
     if (details) console.log(`   Details: ${details}`);
   }
 
-  // Calculate balance for an account in real-time
-  private static async calculateBalance(accountId: string): Promise<number> {
+  // Calculate an account's balance in real-time, respecting its mode:
+  //   PERSONAL → income − expense (from entries)
+  //   BUSINESS → revenue − costs (Orders − Costs), matching the P&L. Business
+  //     accounts have no entries, so summing entries always returned 0 — this is
+  //     why the switcher showed 0 for business accounts.
+  private static async calculateBalance(accountId: string, mode?: string): Promise<number> {
+    if (mode === 'BUSINESS') {
+      const [orders, costs] = await Promise.all([
+        prisma.order.aggregate({
+          _sum: { amount: true },
+          where: { accountId, status: { not: 'CANCELLED' } },
+        }),
+        prisma.cost.aggregate({ _sum: { amount: true }, where: { accountId } }),
+      ]);
+      return Number(orders._sum.amount ?? 0) - Number(costs._sum.amount ?? 0);
+    }
+
     const balanceResult = await prisma.$queryRaw<Array<{
       total_income: number;
       total_expenses: number;
     }>>`
-      SELECT 
+      SELECT
         COALESCE(SUM(CASE WHEN c.type = 'INCOME' THEN t.amount ELSE 0 END), 0) as total_income,
         COALESCE(SUM(CASE WHEN c.type = 'EXPENSE' THEN t.amount ELSE 0 END), 0) as total_expenses
       FROM entries t
       JOIN categories c ON t.category_id = c.id
       WHERE t.account_id = ${accountId}
     `;
-    
+
     const balance = balanceResult[0] || { total_income: 0, total_expenses: 0 };
     return Number(balance.total_income) - Number(balance.total_expenses);
   }
@@ -43,7 +58,7 @@ export class PrismaAccountService {
     
     // Calculate balance for each account in real-time
     const accountsWithBalances = await Promise.all(result.map(async (account: any) => {
-      const currentBalance = await this.calculateBalance(account.id);
+      const currentBalance = await this.calculateBalance(account.id, account.mode);
       
       return {
         id: account.id,
@@ -79,7 +94,7 @@ export class PrismaAccountService {
       console.log(`✅ Database found account: ${account.name} (${account.type})`);
       
       // Calculate current balance in real-time
-      const currentBalance = await this.calculateBalance(id);
+      const currentBalance = await this.calculateBalance(id, account.mode);
       
       return {
         id: account.id,
@@ -205,7 +220,7 @@ export class PrismaAccountService {
       console.log(`✅ Database updated account: ${updatedAccount.name} (${updatedAccount.type})`);
 
       // Calculate current balance in real-time
-      const currentBalance = await this.calculateBalance(id);
+      const currentBalance = await this.calculateBalance(id, updatedAccount.mode);
 
       return {
         id: updatedAccount.id,
@@ -258,7 +273,7 @@ export class PrismaAccountService {
     
     // Calculate balance for each account in real-time
     const accountsWithBalances = await Promise.all(result.map(async (account: any) => {
-      const currentBalance = await this.calculateBalance(account.id);
+      const currentBalance = await this.calculateBalance(account.id, account.mode);
       
       return {
         id: account.id,

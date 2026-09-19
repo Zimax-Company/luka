@@ -1,5 +1,6 @@
 import Navigation from '@/components/Navigation'
 import ThemeToggle from '@/components/ThemeToggle'
+import ChangePasswordForm from '@/components/ChangePasswordForm'
 
 export default function Settings() {
   return (
@@ -18,10 +19,10 @@ export default function Settings() {
             <ThemeToggle />
           </div>
 
-          <div className="border border-border rounded-lg bg-card/60 p-8 text-center">
-            <span className="text-6xl mb-4 block">⚙️</span>
-            <h2 className="text-xl font-semibold text-foreground mb-2">More Settings Coming Soon</h2>
-            <p className="text-muted-foreground">Additional preferences and configuration options</p>
+          <div className="border border-border rounded-lg bg-card p-8 mb-6">
+            <h2 className="text-xl font-semibold text-foreground mb-1">Security</h2>
+            <p className="text-muted-foreground mb-4">Change your password.</p>
+            <ChangePasswordForm />
           </div>
         </div>
       </main>
