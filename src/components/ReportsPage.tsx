@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, subMonths, eachMonthOfInterval } from 'date-fns';
 import { authFetch } from '@/lib/api';
@@ -36,6 +37,7 @@ interface MonthlyData {
 }
 
 interface CategoryData {
+  categoryId: string;
   name: string;
   value: number;
   type: 'INCOME' | 'EXPENSE';
@@ -67,6 +69,7 @@ const EXPENSE_COLORS = ['#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#7f1d1d'];
 const INCOME_COLORS = ['#10b981', '#059669', '#047857', '#065f46', '#064e3b'];
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,17 +251,19 @@ export default function ReportsPage() {
     const categoryTotals = filteredTransactions.reduce((acc, transaction) => {
       const categoryName = transaction.category.name;
       const type = transaction.category.type;
-      
+      const categoryId = transaction.categoryId ?? transaction.category?.id ?? '';
+
       if (!acc[categoryName]) {
-        acc[categoryName] = { total: 0, type };
+        acc[categoryName] = { total: 0, type, categoryId };
       }
       acc[categoryName].total += transaction.amount;
-      
+
       return acc;
-    }, {} as Record<string, { total: number; type: 'INCOME' | 'EXPENSE' }>);
+    }, {} as Record<string, { total: number; type: 'INCOME' | 'EXPENSE'; categoryId: string }>);
 
     return Object.entries(categoryTotals)
       .map(([name, data], index) => ({
+        categoryId: data.categoryId,
         name,
         value: Math.round(data.total),
         type: data.type,
@@ -643,21 +648,43 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {categoryData.map((category, index) => (
-                    <tr key={index} className="border-b border-border">
-                      <td className="py-2 text-foreground">{category.name}</td>
-                      <td className="py-2">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          category.type === 'INCOME' 
-                            ? 'bg-green-900 text-green-300' 
-                            : 'bg-red-900 text-red-300'
-                        }`}>
-                          {category.type}
-                        </span>
-                      </td>
-                      <td className="py-2 text-right text-foreground">{formatCurrency(category.value)}</td>
-                    </tr>
-                  ))}
+                  {categoryData.map((category, index) => {
+                    const openEntries = () => {
+                      if (!category.categoryId) return;
+                      const p = new URLSearchParams({ categoryId: category.categoryId });
+                      // Carry the period across as year/month where it maps cleanly
+                      // (the entries list filters by year/month, not arbitrary ranges).
+                      const y = dateRange.startDate.slice(0, 4);
+                      const sameYear = dateRange.endDate.slice(0, 4) === y;
+                      const sameMonth = sameYear && dateRange.endDate.slice(5, 7) === dateRange.startDate.slice(5, 7);
+                      if (sameYear) p.append('year', y);
+                      if (sameMonth) p.append('month', dateRange.startDate.slice(5, 7));
+                      router.push(`/entries?${p.toString()}`);
+                    };
+                    return (
+                      <tr
+                        key={index}
+                        onClick={openEntries}
+                        className={`border-b border-border ${category.categoryId ? 'cursor-pointer hover:bg-accent/40' : ''}`}
+                        title={category.categoryId ? 'View entries in this category' : undefined}
+                      >
+                        <td className="py-2 text-foreground">
+                          {category.name}
+                          {category.categoryId ? <span className="ml-2 text-xs text-muted-foreground">→</span> : null}
+                        </td>
+                        <td className="py-2">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            category.type === 'INCOME'
+                              ? 'bg-green-900 text-green-300'
+                              : 'bg-red-900 text-red-300'
+                          }`}>
+                            {category.type}
+                          </span>
+                        </td>
+                        <td className="py-2 text-right text-foreground">{formatCurrency(category.value)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

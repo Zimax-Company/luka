@@ -4,8 +4,8 @@ import { getActor } from '@/lib/actor';
 import { getAccessibleAccountIds, scopeByAccount } from '@/lib/access';
 
 // GET /api/entries/monthly-comparison?type=INCOME|EXPENSE&accountId=<id>
-// Top 5 categories by current-month total, each with its previous-month total
-// and % change — powers the dashboard "top categories, % vs last month" stat.
+// Top 10 categories by current-month total, each with its previous-month total
+// and % change — powers the dashboard "top categories, amount + % vs last month".
 // Account-scoped: pass accountId to get one account's categories (the caller
 // must have access to it); categories never merge across accounts.
 export async function GET(request: NextRequest) {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         return { ...r, changePct }; // changePct null => "new" (no prior month)
       })
       .sort((a, b) => b.current - a.current)
-      .slice(0, 5);
+      .slice(0, 10);
 
     return NextResponse.json({
       success: true,

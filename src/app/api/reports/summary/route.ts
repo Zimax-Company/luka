@@ -50,25 +50,30 @@ export async function GET(request: NextRequest) {
     
     const netAmount = summary.totalIncome - summary.totalExpense;
     
-    // Calculate category breakdown
+    // Calculate category breakdown (keyed by category id so clients can link to
+    // the underlying entries; falls back to name for legacy/uncategorised rows).
     const categoryBreakdown = filteredTransactions.reduce((acc, transaction) => {
+      const categoryId = transaction.categoryId ?? transaction.category?.id ?? '';
       const categoryName = transaction.category.name;
       const categoryType = transaction.category.type;
-      
-      if (!acc[categoryName]) {
-        acc[categoryName] = {
+      const key = categoryId || categoryName;
+
+      if (!acc[key]) {
+        acc[key] = {
+          categoryId,
           name: categoryName,
           type: categoryType,
           total: 0,
           count: 0
         };
       }
-      
-      acc[categoryName].total += transaction.amount;
-      acc[categoryName].count++;
-      
+
+      acc[key].total += transaction.amount;
+      acc[key].count++;
+
       return acc;
     }, {} as Record<string, {
+      categoryId: string;
       name: string;
       type: 'INCOME' | 'EXPENSE';
       total: number;

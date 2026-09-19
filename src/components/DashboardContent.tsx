@@ -433,7 +433,7 @@ export default function DashboardContent() {
             </div>
           ) : comparison && comparison.categories.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-              {comparison.categories.slice(0, 5).map((cat) => (
+              {comparison.categories.slice(0, 10).map((cat) => (
                 <div key={cat.categoryId ?? cat.name} className="border border-border rounded-lg bg-card p-6">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-2xl">{cat.type === 'INCOME' ? '💰' : '💳'}</span>
@@ -441,6 +441,9 @@ export default function DashboardContent() {
                   </div>
                   <p className={`text-2xl font-bold ${cat.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
                     {formatCurrency(Math.abs(cat.current))}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Last month: {formatCurrency(Math.abs(cat.previous))}
                   </p>
                   <div className="mt-2">
                     {renderChangeBadge(cat.changePct)}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { EntryWithCategory } from '@/types/entry';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
@@ -238,6 +239,7 @@ function SearchableCategorySelect({
 }
 
 export default function EntriesPage() {
+  const searchParams = useSearchParams();
   const [transactions, setTransactions] = useState<EntryWithCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -685,6 +687,34 @@ export default function EntriesPage() {
       // Non-critical: fall back to no prefilled items.
     }
   };
+
+  // Deep-link support: /entries?categoryId=&year=&month= prefilters the list
+  // (from Reports "spending by category"); /entries?entry=<id> opens that entry
+  // (from an in-app notification).
+  const initedFromUrl = useRef(false);
+  useEffect(() => {
+    if (initedFromUrl.current || !searchParams) return;
+    initedFromUrl.current = true;
+    const cat = searchParams.get('categoryId');
+    const yr = searchParams.get('year');
+    const mo = searchParams.get('month');
+    const entryId = searchParams.get('entry');
+    if (cat) setFilterCategory(cat);
+    if (yr) setFilterYear(yr);
+    if (mo) setFilterMonth(mo);
+    if (entryId) {
+      (async () => {
+        try {
+          const res = await authFetch(`/api/entries/${entryId}`);
+          const json = await res.json();
+          if (json?.success && json.data) handleEdit(json.data);
+        } catch {
+          // ignore — the entry may have been deleted
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this entry?')) return;

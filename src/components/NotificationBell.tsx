@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { authFetch } from '@/lib/api'
 
 interface Notification {
@@ -35,6 +36,7 @@ function formatRelativeTime(iso: string): string {
 const POLL_INTERVAL_MS = 30_000
 
 export default function NotificationBell() {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -175,12 +177,20 @@ export default function NotificationBell() {
               </div>
             ) : (
               <ul className="divide-y divide-border">
-                {notifications.map((n) => (
+                {notifications.map((n) => {
+                  const canOpen = n.resource === 'entry' && !!n.resourceId
+                  const openEntry = () => {
+                    if (!canOpen) return
+                    setOpen(false)
+                    router.push(`/entries?entry=${encodeURIComponent(n.resourceId)}`)
+                  }
+                  return (
                   <li
                     key={n.id}
+                    onClick={openEntry}
                     className={`flex items-start gap-3 px-4 py-3 ${
                       n.readAt ? '' : 'bg-blue-600/5'
-                    }`}
+                    } ${canOpen ? 'cursor-pointer hover:bg-accent/40' : ''}`}
                   >
                     <span
                       aria-hidden="true"
@@ -195,7 +205,8 @@ export default function NotificationBell() {
                       </p>
                     </div>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             )}
           </div>
