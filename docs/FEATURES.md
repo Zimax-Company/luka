@@ -77,7 +77,7 @@ Grouped into epics. **P** = platform.
 |---|---|---|---|---|
 | 2 | Dashboard "top category vs last month": also show **last-month amount**; line graph of top 10 | mobile, web | Endpoint bumped to top 10; both clients now show the last-month amount per category alongside the current amount + % badge. (Multi-series line chart of top-10 = future enhancement.) | ✅ Amounts + top-10 done; chart = future |
 | 11 | **Spending-by-category** in Reports → **clickable to show the entries** | mobile, web | Web: reports summary now carries `categoryId`; category rows link to `/entries?categoryId=&year=&month=`. Mobile: pending (needs categoryId in the breakdown + a categoryId filter on the entries list). | ✅ Web done; ⬜ mobile next |
-| 12 | **Compare a category across years** (e.g. Bag 2026 vs 2025 vs 2024) | backend, mobile, web | New `GET /api/entries/category-yearly?categoryId=&years=` (or reuse `trend` per year) → yearly totals (and/or monthly series per year) rendered as multi-series line/bars. | ⬜ Next |
+| 12 | **Compare a category across years** (e.g. Bag 2026 vs 2025 vs 2024) | backend, mobile, web | `GET /api/entries/category-yearly?categoryId=&years=` → yearly totals + 12-month series per year. Web Reports has a "Compare across years" card (multi-line chart + yearly totals). Mobile pending. | ✅ Backend + web done; ⬜ mobile next |
 
 ### EPIC F — Business cost categories
 | # | Item | P | Design | Status |

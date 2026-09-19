@@ -67,6 +67,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const EXPENSE_COLORS = ['#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#7f1d1d'];
 const INCOME_COLORS = ['#10b981', '#059669', '#047857', '#065f46', '#064e3b'];
+const YEAR_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -86,6 +87,14 @@ export default function ReportsPage() {
   const [trendCategoryId, setTrendCategoryId] = useState<string>('');
   const [trendData, setTrendData] = useState<TrendData | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
+  // Compare a category across years (e.g. Bag 2026 vs 2025 vs 2024).
+  const [compareCategoryId, setCompareCategoryId] = useState<string>('');
+  const [compareData, setCompareData] = useState<{
+    categoryName: string | null;
+    years: number[];
+    byYear: { year: number; total: number }[];
+    monthlySeries: Record<string, number | string>[];
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -154,6 +163,27 @@ export default function ReportsPage() {
       cancelled = true;
     };
   }, [trendCategoryId, trendYear]);
+
+  // Fetch the multi-year comparison for the chosen category.
+  useEffect(() => {
+    if (!compareCategoryId) {
+      setCompareData(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/entries/category-yearly?categoryId=${compareCategoryId}`);
+        const json = await res.json();
+        if (!cancelled) setCompareData(json?.success ? json.data : null);
+      } catch {
+        if (!cancelled) setCompareData(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [compareCategoryId]);
 
   // Years to offer: from summary data, else fall back to the last 5 years.
   const trendYearOptions = availableYears.length > 0
@@ -412,6 +442,69 @@ export default function ReportsPage() {
           ) : (
             <div className="h-80 flex items-center justify-center">
               <p className="text-muted-foreground">No trend data available.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Compare a category across years */}
+        <div className="mb-8 bg-card border border-border rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4 text-foreground">📊 Compare across years</h2>
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">Category</label>
+              <select
+                value={compareCategoryId}
+                onChange={(e) => setCompareCategoryId(e.target.value)}
+                className="px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a category…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!compareCategoryId ? (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">Pick a category to compare year over year.</p>
+            </div>
+          ) : compareData && compareData.years.length > 0 ? (
+            <div>
+              <div className="flex flex-wrap gap-4 mb-4">
+                {compareData.byYear.map((y) => (
+                  <div key={y.year} className="border border-border rounded-lg px-4 py-2">
+                    <div className="text-xs text-muted-foreground">{y.year}</div>
+                    <div className="text-lg font-semibold text-foreground">{formatCurrency(y.total)}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={compareData.monthlySeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#33333333" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Legend />
+                    {compareData.years.map((yr, i) => (
+                      <Line
+                        key={yr}
+                        type="monotone"
+                        dataKey={String(yr)}
+                        name={String(yr)}
+                        stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">No data for this category.</p>
             </div>
           )}
         </div>
