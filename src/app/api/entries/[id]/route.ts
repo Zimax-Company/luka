@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaEntryService } from '@/services/prismaEntryService';
 import { UpdateEntryRequest } from '@/types/entry';
 import { getActor } from '@/lib/actor';
-import { recordAudit } from '@/lib/audit';
+import { recordAudit, getResourceCreator } from '@/lib/audit';
 import { canAccessAccount } from '@/lib/access';
 import { notifyEntryChange } from '@/lib/notify';
 import { invalidateCategoryModel } from '@/lib/categorizeStore';
@@ -35,10 +35,11 @@ export async function GET(
     }
 
     const items = await getEntryItems(id);
+    const createdBy = await getResourceCreator('entry', id);
 
     return NextResponse.json({
       success: true,
-      data: { ...transaction, items },
+      data: { ...transaction, items, createdBy },
       source: 'database'
     });
 

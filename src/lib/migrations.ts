@@ -1100,6 +1100,37 @@ export const MIGRATIONS: Migration[] = [
         await prisma.$executeRawUnsafe(`ALTER TABLE costs DROP COLUMN category_id`);
       }
     },
+  },
+  {
+    id: '024_backfill_entry_item_catalog',
+    description: 'Turn free-text entry item names into catalog items: create a CategoryItem per distinct (category, item name) and link entry_items.category_item_id',
+    async up(prisma) {
+      // 1) Create catalog items for every distinct (category, item name) that
+      //    doesn't already exist (category comes from the item's entry).
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO category_items (id, category_id, name, created_at)
+        SELECT UUID(), d.category_id, d.name, NOW(3)
+        FROM (
+          SELECT DISTINCT e.category_id AS category_id, ei.name AS name
+          FROM entry_items ei
+          JOIN entries e ON e.id = ei.entry_id
+          WHERE ei.name IS NOT NULL AND ei.name <> ''
+        ) d
+        LEFT JOIN category_items ci
+          ON ci.category_id = d.category_id AND ci.name = d.name
+        WHERE ci.id IS NULL`);
+
+      // 2) Link each entry item to its catalog item.
+      await prisma.$executeRawUnsafe(`
+        UPDATE entry_items ei
+        JOIN entries e ON e.id = ei.entry_id
+        JOIN category_items ci ON ci.category_id = e.category_id AND ci.name = ei.name
+        SET ei.category_item_id = ci.id
+        WHERE ei.category_item_id IS NULL AND ei.name IS NOT NULL AND ei.name <> ''`);
+    },
+    async down() {
+      // Non-destructive: leaves created catalog items + links in place.
+    },
   }
 ];
 

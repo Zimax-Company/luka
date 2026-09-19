@@ -3,6 +3,7 @@ import { createPrismaClient } from '@/lib/prismaClient';
 import { getActor } from '@/lib/actor';
 import { getAccessibleAccountIds, canAccessAccount } from '@/lib/access';
 import { recordAudit } from '@/lib/audit';
+import { notifyBusinessChange } from '@/lib/notify';
 import { CreateCostRequest } from '@/types/business';
 
 const prisma = createPrismaClient();
@@ -149,6 +150,12 @@ export async function POST(request: NextRequest) {
     });
 
     recordAudit(actor, 'CREATE', 'cost', cost.id, `Cost ${Number(cost.amount)} ${category ?? ''}`.trim());
+    void notifyBusinessChange(actor, 'CREATE', 'cost', {
+      id: cost.id,
+      accountId: cost.accountId,
+      amount: Number(cost.amount),
+      label: category ?? null,
+    });
 
     return NextResponse.json({ success: true, data: mapCost(cost) }, { status: 201 });
   } catch (error) {

@@ -62,6 +62,56 @@ export async function notifyEntryChange(
   }
 }
 
+// Business activity (Orders/Costs) fan-out — mirrors notifyEntryChange so
+// business-account members get notified about revenue/cost changes.
+export async function notifyBusinessChange(
+  actor: Actor | null,
+  action: 'CREATE' | 'UPDATE' | 'DELETE',
+  kind: 'order' | 'cost',
+  item: { id: string; accountId: string; amount: number | string; label?: string | null },
+): Promise<void> {
+  try {
+    const accountId = item.accountId;
+    if (!accountId) return;
+
+    const recipients = await getAccountNotificationRecipients(actor, accountId);
+    if (recipients.length === 0) return;
+
+    const account = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: { name: true, customerId: true },
+    });
+
+    const noun = kind === 'order' ? 'order' : 'cost';
+    const verb = action === 'CREATE' ? 'added' : action === 'UPDATE' ? 'updated' : 'deleted';
+    const who = actor?.name ?? 'Someone';
+    const label = item.label ? ` · ${item.label}` : '';
+    const summary = `${who} ${verb} ${noun} ${Number(item.amount) || 0}${label} in ${account?.name ?? 'an account'}`;
+
+    await prisma.notification.createMany({
+      data: recipients.map(r => ({
+        customerId: account?.customerId ?? actor?.customerId ?? null,
+        recipientId: r.id,
+        actorId: actor?.id ?? null,
+        actorName: who,
+        action,
+        resource: kind,
+        resourceId: item.id,
+        accountId,
+        accountName: account?.name ?? null,
+        summary,
+      })),
+    });
+    void sendPushToUsers(recipients.map(r => r.id), {
+      title: account?.name ?? 'Luka',
+      body: summary,
+      data: { type: kind, accountId },
+    });
+  } catch (error) {
+    console.error('notifyBusinessChange failed:', error);
+  }
+}
+
 // A new transfer is pending — notify the RECIPIENT account's members/admins.
 export async function notifyTransferCreated(
   actor: Actor | null,

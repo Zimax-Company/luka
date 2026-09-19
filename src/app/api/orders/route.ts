@@ -3,6 +3,7 @@ import { createPrismaClient } from '@/lib/prismaClient';
 import { getActor } from '@/lib/actor';
 import { getAccessibleAccountIds, canAccessAccount } from '@/lib/access';
 import { recordAudit } from '@/lib/audit';
+import { notifyBusinessChange } from '@/lib/notify';
 import { CreateOrderRequest, OrderStatus } from '@/types/business';
 
 const prisma = createPrismaClient();
@@ -127,6 +128,12 @@ export async function POST(request: NextRequest) {
     });
 
     recordAudit(actor, 'CREATE', 'order', order.id, `Order ${Number(order.amount)} (${status})`);
+    void notifyBusinessChange(actor, 'CREATE', 'order', {
+      id: order.id,
+      accountId: order.accountId,
+      amount: Number(order.amount),
+      label: order.customerName ?? order.reference ?? null,
+    });
 
     return NextResponse.json({ success: true, data: mapOrder(order) }, { status: 201 });
   } catch (error) {
