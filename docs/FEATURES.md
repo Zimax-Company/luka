@@ -50,34 +50,34 @@ Grouped into epics. **P** = platform.
 ### EPIC A — Navigation & account UX
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 7 | Move account **switcher** out of More to a central **top bar** | mobile, web | Add a persistent account pill/menu in the header (dashboard top bar mobile; nav bar web). Keep it in More too on mobile? No — single central place. | ⬜ Planned |
-| 10 | **More menu** must differ by account type (currently identical) | mobile | `MoreScreen` takes a `mode` (or reads active account); PERSONAL keeps Accounts/Inbox/Schedules/Postings/Reports; BUSINESS shows a business-relevant set (Accounts, Subscription, Users, Reports, Settings). Web already mode-driven. | ⬜ Planned |
-| 8 | **Switcher balance shows 0** for other accounts | backend | Root cause: `calculateBalance` sums **entries only**, so BUSINESS accounts (balance = Orders − Costs) always read 0. Fix `calculateBalance`/`getAll` to branch on `mode`: PERSONAL = income−expense; BUSINESS = non-cancelled orders − costs (matches P&L). | ⬜ Planned |
+| 7 | Move account **switcher** out of More to a central **top bar** | mobile, web | Mobile: `AccountSwitchHeader` is the header title on Home/BizHome (shows account + ⌄, tap = switch); removed from More. Web: already in nav. | ✅ Mobile done (web already had it in nav) |
+| 10 | **More menu** must differ by account type (currently identical) | mobile | `MoreScreen` reads the active account mode: BUSINESS hides Inbox/Schedules/Postings/Reports; both keep Accounts/Subscription/Users/Change password. | ✅ Done |
+| 8 | **Switcher balance shows 0** for other accounts | backend | Fixed: `calculateBalance` branches on `mode` — PERSONAL = income−expense; BUSINESS = non-cancelled Orders − Costs (matches P&L). | ✅ Done (shipped) |
 
 ### EPIC B — Transaction detail & deep-linking
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 3 | **View transaction** on income & expense (read-only detail) | mobile, web | New detail screen/page showing amount, category, date, note, line items, account; Edit/Delete actions. Mobile: `TransactionDetail` screen pushed from list row tap (replace/augment the action sheet). Web: modal or `/entries/[id]` view. | ⬜ Planned |
-| 6 | **In-app notification → transaction detail** | mobile, web | Notifications already carry `resource`/`resourceId`/`accountId`. On tap, if `resource==='entry'`, deep-link to the transaction detail (switch active account if needed). | ⬜ Planned |
+| 3 | **View transaction** on income & expense (read-only detail) | mobile, web | Mobile: `TransactionDetailScreen` (amount, category, account, date, note, line items + Edit/Delete); list row tap opens it, long-press = quick actions. Web: notification/report deep-links open the entry via the existing modal. | ✅ Mobile done; web via modal (dedicated read-only web page = future polish) |
+| 6 | **In-app notification → transaction detail** | mobile, web | Mobile: NotificationsScreen entry rows → `TransactionDetail` (registered in Home stack; detail fetches by id, account-agnostic). Web: NotificationBell entry rows → `/entries?entry=<id>`. | ✅ Done |
 
 ### EPIC C — Auth
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 5 | **Change password** when logged in (old → new) | backend, mobile, web | `POST /api/auth/change-password` `{currentPassword,newPassword}` (actor-gated, verifies current, min 8). Mobile: form in More/Security. Web: form in `/settings`. Stays plaintext to match login (tech debt §4). | ⬜ Planned |
+| 5 | **Change password** when logged in (old → new) | backend, mobile, web | `POST /api/auth/change-password` (actor-gated, verifies current, min 8). Mobile: `ChangePasswordScreen` (More → Change password). Web: form on `/settings`. Plaintext to match login (tech debt §4). | ✅ Done (shipped) |
 
 ### EPIC D — Smart & quick entry
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 4 | On expense entry, **category select → 3 amount + 3 note suggestions** | backend, mobile, web | New `GET /api/entries/suggest-details?accountId=&categoryId=` → most-frequent/recent amounts + notes for that category from history. Render as tappable chips that fill the fields. | ⬜ Planned |
-| 1a | Quick-add polish: **amount-first keypad** + **recent-category chips** | mobile | Reorder form to amount-first with a large numeric entry; show recent categories as quick chips above the picker. | ⬜ Planned |
-| 1b | **Home-screen widget** + **add-from-notification** | mobile (native) | Android App Widget (Kotlin, `xml/` provider + layout) opening a quick-add deep link; a persistent/ongoing notification with an "Add" action. Requires native work + device testing — separate track. | ⬜ Planned |
+| 4 | On expense entry, **category select → 3 amount + 3 note suggestions** | backend, mobile, web | `GET /api/entries/suggest-details?accountId=&categoryId=` → top 3 most-used amounts + notes. Chips under the amount/note fields (mobile TransactionFormScreen + web EntriesPage). | ✅ Done (shipped) |
+| 1a | Quick-add polish: **amount-first keypad** + **recent-category chips** | mobile | Reorder form to amount-first with a large numeric entry; show recent categories as quick chips above the picker. | ⬜ Next |
+| 1b | **Home-screen widget** + **add-from-notification** | mobile (native) | Android App Widget (Kotlin, `xml/` provider + layout) opening a quick-add deep link; a persistent/ongoing notification with an "Add" action. Requires native work + device testing — separate track. | ⬜ Next (native track) |
 
 ### EPIC E — Reports & analytics
 | # | Item | P | Design | Status |
 |---|---|---|---|---|
-| 2 | Dashboard "top category vs last month": also show **last-month amount**; **line graph of top 10** | mobile, web | `monthly-comparison` already returns `current`+`previous` per category → bump to top 10 and render both amounts; add a comparison chart (bars/line) of top-10 current vs previous. | ⬜ Planned |
-| 11 | **Spending-by-category** in Reports → **clickable to show the entries** | mobile, web | Category breakdown rows link to a filtered entries view (`/api/entries?categoryId=` exists) within the selected period. | ⬜ Planned |
-| 12 | **Compare a category across years** (e.g. Bag 2026 vs 2025 vs 2024) | backend, mobile, web | New `GET /api/entries/category-yearly?categoryId=&years=` (or reuse `trend` per year) → yearly totals (and/or monthly series per year) rendered as multi-series line/bars. | ⬜ Planned |
+| 2 | Dashboard "top category vs last month": also show **last-month amount**; line graph of top 10 | mobile, web | Endpoint bumped to top 10; both clients now show the last-month amount per category alongside the current amount + % badge. (Multi-series line chart of top-10 = future enhancement.) | ✅ Amounts + top-10 done; chart = future |
+| 11 | **Spending-by-category** in Reports → **clickable to show the entries** | mobile, web | Web: reports summary now carries `categoryId`; category rows link to `/entries?categoryId=&year=&month=`. Mobile: pending (needs categoryId in the breakdown + a categoryId filter on the entries list). | ✅ Web done; ⬜ mobile next |
+| 12 | **Compare a category across years** (e.g. Bag 2026 vs 2025 vs 2024) | backend, mobile, web | New `GET /api/entries/category-yearly?categoryId=&years=` (or reuse `trend` per year) → yearly totals (and/or monthly series per year) rendered as multi-series line/bars. | ⬜ Next |
 
 ### EPIC F — Business cost categories
 | # | Item | P | Design | Status |
