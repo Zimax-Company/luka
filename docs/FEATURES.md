@@ -86,6 +86,23 @@ Grouped into epics. **P** = platform.
 
 ---
 
+## 3b. Feedback round (refinements)
+
+| Item | What changed | Status |
+|---|---|---|
+| Switcher not obvious | Mobile header pill restyled (tinted, bordered, ⇅ icon); web adds a top-bar account pill | ✅ |
+| Remove old switcher | Removed from mobile Business dashboard + web More menu | ✅ |
+| Business notifications | Orders/Costs now notify account members (in-app + push) via `notifyBusinessChange` | ✅ |
+| Change password location | Moved from Tools → **Security** section (mobile) | ✅ |
+| Reports features missing on mobile | Mobile Reports: "spending by category" rows open the entries (`CategoryEntries`); added "Compare across years" | ✅ |
+| Category before amount | Mobile entry form reordered: category (with chips) → amount | ✅ |
+| Quick categories by frequency | New `GET /api/entries/frequent-categories`; chips ranked by usage, not DB order | ✅ |
+| Items as dropdown + migration | Migration 024 backfills the `CategoryItem` catalog + links; mobile item name is now a catalog dropdown with "+ New item" | ✅ mobile; ⬜ web parity |
+| Who created the transaction | Detail shows "Created by" (resolved from the audit trail) | ✅ mobile; ⬜ web |
+| Luka widget | Android home-screen widget (Add expense / income) that opens Luka — **how to add:** long-press the home screen → Widgets → Luka → drag. Deep-link straight into the add form = next step. | ✅ widget opens app; ⬜ deep-link routing |
+
+Remaining web parity: item-name dropdown + category-first order + "created by" on the web entry view. Widget deep-link routing (open the add form directly) needs a small native→JS intent bridge.
+
 ## 4. Known tech debt / production notes
 
 - **Plaintext passwords** (`users.password`): login and change-password compare
