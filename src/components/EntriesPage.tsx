@@ -281,6 +281,7 @@ export default function EntriesPage() {
 
   // Smart category suggestion state (only for brand-new entries).
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
+  const [detailSuggestions, setDetailSuggestions] = useState<{ amounts: number[]; notes: string[] }>({ amounts: [], notes: [] });
   const [categoryAutoFilled, setCategoryAutoFilled] = useState(false);
   const [categoryTouched, setCategoryTouched] = useState(false);
 
@@ -523,6 +524,31 @@ export default function EntriesPage() {
       cancelled = true;
     };
   }, [formData.categoryId, showForm]);
+
+  // After a category is chosen, fetch the most-used amounts + notes for that
+  // account+category so they can be filled with one click.
+  useEffect(() => {
+    if (!showForm || !formData.categoryId || !formData.accountId) {
+      setDetailSuggestions({ amounts: [], notes: [] });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ accountId: formData.accountId, categoryId: formData.categoryId });
+        const res = await authFetch(`/api/entries/suggest-details?${params.toString()}`);
+        const json = await res.json();
+        if (!cancelled) {
+          setDetailSuggestions(json?.success ? json.data : { amounts: [], notes: [] });
+        }
+      } catch {
+        if (!cancelled) setDetailSuggestions({ amounts: [], notes: [] });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.categoryId, formData.accountId, showForm]);
 
   // Item row helpers.
   const addItem = (preset?: CatalogItem) => {
@@ -969,6 +995,20 @@ export default function EntriesPage() {
                       placeholder="0.00 NGN"
                       required
                     />
+                    {detailSuggestions.amounts.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {detailSuggestions.amounts.map((a) => (
+                          <button
+                            key={`amt-${a}`}
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, amount: formatAmountInput(String(a)) }))}
+                            className="px-2.5 py-1 rounded-full border border-border bg-card text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
+                          >
+                            {formatCurrency(a)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -983,6 +1023,20 @@ export default function EntriesPage() {
                     className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter note (optional)"
                   />
+                  {detailSuggestions.notes.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {detailSuggestions.notes.map((n) => (
+                        <button
+                          key={`note-${n}`}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, note: n }))}
+                          className="px-2.5 py-1 rounded-full border border-border bg-card text-xs text-muted-foreground hover:text-foreground hover:bg-accent max-w-[12rem] truncate"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
